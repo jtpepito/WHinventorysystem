@@ -31,7 +31,7 @@ export default async function ItemsPage({ searchParams }: { searchParams: SP }) 
       <PageHeader
         title="Items"
         description={`${items.length} item(s)`}
-        actions={role === 'admin' && <Link href="/items/new" className={buttonVariants()}>New item</Link>}
+        actions={role === 'admin' && <Link prefetch={false} href="/items/new" className={buttonVariants()}>New item</Link>}
       />
       <form className="mb-4 grid gap-2 sm:grid-cols-[1fr_12rem_10rem_auto]" role="search">
         <Input name="q" defaultValue={q} placeholder="Search SKU or name" aria-label="Search" />
@@ -62,8 +62,8 @@ export default async function ItemsPage({ searchParams }: { searchParams: SP }) 
             <TableBody>
               {items.map((i) => (
                 <TableRow key={i.id} className={cn(i.low && 'bg-red-50/60')}>
-                  <TableCell className="font-mono text-xs"><Link href={`/items/${i.id}`} className="hover:underline">{i.sku}</Link></TableCell>
-                  <TableCell><Link href={`/items/${i.id}`} className="hover:underline">{i.name}</Link></TableCell>
+                  <TableCell className="font-mono text-xs"><Link prefetch={false} href={`/items/${i.id}`} className="hover:underline">{i.sku}</Link></TableCell>
+                  <TableCell><Link prefetch={false} href={`/items/${i.id}`} className="hover:underline">{i.name}</Link></TableCell>
                   <TableCell>{i.category}</TableCell>
                   <TableCell>{i.unit}</TableCell>
                   <TableCell className="text-right tabular-nums">{formatQty(i.qty)}</TableCell>

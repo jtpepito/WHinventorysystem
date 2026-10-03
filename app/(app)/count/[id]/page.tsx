@@ -46,7 +46,7 @@ export default async function CountSessionPage({
           <TableBody>
             {session.lines.map((l) => (
               <TableRow key={l.lineId}>
-                <TableCell className="font-mono text-xs"><Link className="hover:underline" href={`/items/${l.itemId}`}>{l.sku}</Link></TableCell>
+                <TableCell className="font-mono text-xs"><Link prefetch={false} className="hover:underline" href={`/items/${l.itemId}`}>{l.sku}</Link></TableCell>
                 <TableCell>{l.name}</TableCell>
                 <TableCell className="text-right tabular-nums">{formatQty(l.expected)}</TableCell>
                 <TableCell className="text-right tabular-nums">{l.actual === null ? 'Not counted' : formatQty(l.actual)}</TableCell>

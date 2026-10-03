@@ -32,7 +32,7 @@ export function MovementTable({ rows, showItem = true }: { rows: MovementRow[]; 
               <TableCell><Badge className={cn('capitalize', TYPE_STYLE[m.type])}>{m.type}</Badge></TableCell>
               {showItem && (
                 <TableCell>
-                  <Link href={`/items/${m.itemId}`} className="hover:underline"><span className="font-mono text-xs">{m.sku}</span> {m.itemName}</Link>
+                  <Link prefetch={false} href={`/items/${m.itemId}`} className="hover:underline"><span className="font-mono text-xs">{m.sku}</span> {m.itemName}</Link>
                 </TableCell>
               )}
               <TableCell className={cn('text-right font-medium tabular-nums', m.qtyDelta < 0 ? 'text-red-700' : 'text-emerald-700')}>

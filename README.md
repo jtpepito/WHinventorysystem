@@ -1,36 +1,55 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Inventory
 
-## Getting Started
+Stock you can trust for a hardware/retail shop: receive and release stock, live on-hand quantities with weighted-average cost, low-stock alerts, physical counts, an immutable movement ledger, and CSV reports.
 
-First, run the development server:
+Runs locally on one PC. No Docker, no cloud. Data lives in a single SQLite file.
+
+## Requirements
+
+- Node.js 24 or newer
+
+## First run
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm install
+cp .env.example .env.local
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Edit `.env.local`: set `ADMIN_PASSWORD`, `ENCODER_PASSWORD` (different from each other), and `SESSION_SECRET` (generate with `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`).
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```bash
+npm run build
+npm start
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Open http://localhost:3000. The database (`data/inventory.db`) is created and filled with 60 days of sample data on first start. To start over, stop the app and delete the `data/` folder.
 
-## Learn More
+Other PCs on the shop network can use `http://<this-pc's-ip>:3000`. Login cookies work over plain HTTP; set `COOKIE_SECURE=1` only if you put the app behind HTTPS.
 
-To learn more about Next.js, take a look at the following resources:
+## Roles
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+- **Admin** password: everything — dashboard, items, receive, release, count, movements, reports, settings, ledger check.
+- **Encoder** password: receive, release, count, and read-only items and movements.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Rules the app enforces
 
-## Deploy on Vercel
+- On-hand qty is cached on each item and updated in the same transaction as each movement. **Ledger check** (`/debug`) compares it with the sum of movements and can rebuild it.
+- Receiving updates the weighted-average cost; releasing never changes it.
+- You cannot release more than is on hand, even split across several lines.
+- A count can't be posted if stock moved after it started; use **Refresh expected** and re-check those items.
+- Movements are never edited or deleted; corrections are new adjustments (counts post them automatically with the note "count variance").
+- Low stock = active item with qty at or below its reorder point. New items start at qty 0 with reorder point 0, so they show as low until you set one.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## Backups
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Copy `data/inventory.db` (with the app stopped, or also copy the `-wal` file) to a USB drive or another PC.
+
+## Development
+
+```bash
+npm run dev        # dev server
+npm test           # domain tests (Vitest)
+npm run test:e2e   # end-to-end acceptance (Playwright; builds the app and uses data/e2e.db)
+npm run typecheck
+npm run lint
+```

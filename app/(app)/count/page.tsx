@@ -32,7 +32,7 @@ export default async function CountPage() {
             <TableBody>
               {sessions.map((s) => (
                 <TableRow key={s.id}>
-                  <TableCell><Link className="hover:underline" href={`/count/${s.id}`}>{formatManila(s.startedAt)}</Link></TableCell>
+                  <TableCell><Link prefetch={false} className="hover:underline" href={`/count/${s.id}`}>{formatManila(s.startedAt)}</Link></TableCell>
                   <TableCell>{s.scope}</TableCell>
                   <TableCell className="text-right tabular-nums">{s.countedCount} / {s.lineCount}</TableCell>
                   <TableCell className="text-right tabular-nums">{s.varianceCount}</TableCell>
