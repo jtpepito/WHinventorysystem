@@ -22,7 +22,9 @@ npm run build
 npm start
 ```
 
-Open http://localhost:3000. The database (`data/inventory.db`) is created and filled with 60 days of sample data on first start. To start over, stop the app and delete the `data/` folder.
+Open http://localhost:3000. The database (`data/inventory.db`) is created on first start and filled with 60 days of sample data to try things out.
+
+**Going live:** add `SAMPLE_DATA=0` to `.env.local`, stop the app, and delete (or move) the `data/` folder. On the next start the database begins empty except for the five categories and common units; add suppliers and items under Settings and Items. To start over at any time, stop the app and delete `data/` again.
 
 Other PCs on the shop network can use `http://<this-pc's-ip>:3000`. Login cookies work over plain HTTP; set `COOKIE_SECURE=1` only if you put the app behind HTTPS.
 

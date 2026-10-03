@@ -47,6 +47,18 @@ describe('seed', () => {
   it('keeps the cache equal to the ledger', () => {
     expect(ledgerCheck(seeded()).every((r) => r.match)).toBe(true);
   });
+  it('can start empty with only the starter categories and units', () => {
+    const db = openDb(':memory:');
+    expect(seedIfEmpty(db, NOW, { sample: false })).toBe(true);
+    expect((db.prepare('SELECT name FROM categories ORDER BY name').all() as { name: string }[]).map((c) => c.name)).toEqual([
+      'Electrical', 'Fasteners', 'Paint', 'Plumbing', 'Tools',
+    ]);
+    expect(count(db, 'SELECT COUNT(*) AS n FROM units')).toBeGreaterThan(5);
+    for (const t of ['items', 'suppliers', 'movements', 'count_sessions']) expect(count(db, `SELECT COUNT(*) AS n FROM ${t}`)).toBe(0);
+    // Already set up: a second boot adds nothing.
+    expect(seedIfEmpty(db, NOW, { sample: false })).toBe(false);
+    expect(count(db, 'SELECT COUNT(*) AS n FROM categories')).toBe(5);
+  });
   it('is deterministic and seeds only an empty DB', () => {
     const a = seeded();
     const b = seeded();

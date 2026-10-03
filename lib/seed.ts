@@ -153,9 +153,20 @@ export function seed(db: DatabaseSync, now = nowIso()): void {
   });
 }
 
-export function seedIfEmpty(db: DatabaseSync, now = nowIso()): boolean {
-  const { n } = db.prepare('SELECT COUNT(*) AS n FROM items').get() as { n: number };
+// Categories and units only — what a real shop needs before adding its first item.
+export function seedStarter(db: DatabaseSync): void {
+  tx(db, () => {
+    for (const name of Object.keys(CATALOG)) db.prepare('INSERT INTO categories (name) VALUES (?)').run(name);
+    const units = [...new Set(Object.values(CATALOG).flatMap((g) => g.items.map((i) => i.unit))), 'm'];
+    for (const name of units) db.prepare('INSERT INTO units (name) VALUES (?)').run(name);
+  });
+}
+
+// "Empty" means never set up: both seeds create categories, and a real shop keeps at least one.
+export function seedIfEmpty(db: DatabaseSync, now = nowIso(), opts: { sample: boolean } = { sample: true }): boolean {
+  const { n } = db.prepare('SELECT (SELECT COUNT(*) FROM categories) + (SELECT COUNT(*) FROM items) AS n').get() as { n: number };
   if (n > 0) return false;
-  seed(db, now);
+  if (opts.sample) seed(db, now);
+  else seedStarter(db);
   return true;
 }

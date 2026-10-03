@@ -16,6 +16,8 @@ export default defineConfig({
     timeout: 300_000,
     env: {
       DB_PATH: 'data/e2e.db',
+      // The tests rely on the sample data, whatever .env.local says.
+      SAMPLE_DATA: '1',
       ADMIN_PASSWORD: E2E.admin,
       ENCODER_PASSWORD: E2E.encoder,
       SESSION_SECRET: 'e2e-secret-0123456789abcdef0123456789abcdef',

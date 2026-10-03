@@ -12,7 +12,8 @@ export function getDb(): DatabaseSync {
     const file = path.resolve(process.env.DB_PATH ?? path.join(process.cwd(), 'data', 'inventory.db'));
     fs.mkdirSync(path.dirname(file), { recursive: true });
     const db = openDb(file);
-    seedIfEmpty(db);
+    // SAMPLE_DATA=0 starts a real shop with just categories and units; default follows the spec (60 days of sample data).
+    seedIfEmpty(db, undefined, { sample: process.env.SAMPLE_DATA !== '0' });
     g.__inventoryDb = db;
   }
   return g.__inventoryDb;
