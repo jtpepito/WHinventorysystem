@@ -14,6 +14,9 @@ describe('parseNumberInput', () => {
   it.each([
     ['10', 10], [' 5 ', 5], ['1,000', 1000], ['1,234.5', 1234.5], ['.5', 0.5], ['-5', -5], ['0', 0], [7, 7],
   ])('parses %j', (raw, want) => expect(parseNumberInput(raw)).toBe(want));
+  it.each([['12,345,678.5', 12345678.5], ['-1,000', -1000]])('parses grouped %j', (raw, want) => expect(parseNumberInput(raw)).toBe(want));
+  // A decimal comma ("2,5") must not silently become 25.
+  it.each([['2,5'], ['1,0.5'], ['10,00'], [',100'], ['1,,000'], ['1000,']])('rejects mis-grouped %j', (raw) => expect(parseNumberInput(raw)).toBeNull());
   it.each([[''], ['  '], ['abc'], ['1e400'], ['1e3'], ['12abc'], ['--1'], [null], [undefined], [NaN], [Infinity]])(
     'rejects %j', (raw) => expect(parseNumberInput(raw)).toBeNull(),
   );

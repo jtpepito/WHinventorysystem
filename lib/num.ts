@@ -4,12 +4,17 @@ export function round(n: number, dp: number): number {
   return Math.sign(n) * r || 0;
 }
 
-// Accepts "1,000", " 5 ", ".5", "-5". Rejects blanks, exponents, junk and non-finite values.
+const PLAIN = /^-?(\d+(\.\d*)?|\.\d+)$/;
+// Commas only as thousands separators, so a decimal comma like "2,5" is rejected instead of read as 25.
+const GROUPED = /^-?\d{1,3}(,\d{3})+(\.\d*)?$/;
+
+// Accepts "1,000", " 5 ", ".5", "-5". Rejects blanks, exponents, mis-grouped commas, junk and non-finite values.
 export function parseNumberInput(raw: unknown): number | null {
   if (typeof raw === 'number') return Number.isFinite(raw) ? raw : null;
   if (typeof raw !== 'string') return null;
-  const s = raw.trim().replace(/,/g, '');
-  if (!/^-?(\d+(\.\d*)?|\.\d+)$/.test(s)) return null;
+  const t = raw.trim();
+  if (!PLAIN.test(t) && !GROUPED.test(t)) return null;
+  const s = t.replace(/,/g, '');
   const n = Number(s);
   return Number.isFinite(n) ? n : null;
 }
