@@ -1,6 +1,5 @@
 // Asia/Manila is UTC+8 all year (no DST), so fixed-offset math is exact.
 const OFFSET_MS = 8 * 60 * 60 * 1000;
-const DAY_MS = 24 * 60 * 60 * 1000;
 
 export function nowIso(): string {
   return new Date().toISOString();
@@ -28,8 +27,10 @@ export function manilaAt(day: string, hour: number, minute = 0): string {
   return new Date(Date.parse(manilaDayStartUtc(day)) + (hour * 60 + minute) * 60_000).toISOString();
 }
 
-export function daysBefore(iso: string, days: number): string {
-  return new Date(Date.parse(iso) - days * DAY_MS).toISOString();
+// Start of an N-day window in Manila calendar days, today counting as day 1
+// (30 days on Oct 2 = Sep 3 00:00 Manila onwards).
+export function manilaDaysWindowStart(nowIso: string, days: number): string {
+  return manilaDayStartUtc(addDays(manilaDay(nowIso), -(days - 1)));
 }
 
 const dateTime = new Intl.DateTimeFormat('en-PH', {

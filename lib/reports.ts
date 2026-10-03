@@ -1,7 +1,7 @@
 import type { DatabaseSync } from 'node:sqlite';
 import type { CsvCell } from './csv';
 import { round } from './num';
-import { daysBefore, manilaDay } from './time';
+import { manilaDay, manilaDaysWindowStart } from './time';
 
 export type ReportKey = 'stock-value' | 'fast-movers' | 'dead-stock' | 'low-stock';
 export const REPORT_KEYS: ReportKey[] = ['stock-value', 'fast-movers', 'dead-stock', 'low-stock'];
@@ -39,7 +39,7 @@ function fastMovers(db: DatabaseSync, now: string): ReportTable {
        WHERE m.type = 'release' AND m.created_at >= ?
        GROUP BY i.id ORDER BY releases DESC, qty DESC, i.sku LIMIT 20`,
     )
-    .all(daysBefore(now, 30)) as { sku: string; name: string; category: string; unit: string; releases: number; qty: number; value: number }[];
+    .all(manilaDaysWindowStart(now, 30)) as { sku: string; name: string; category: string; unit: string; releases: number; qty: number; value: number }[];
   return {
     key: 'fast-movers', title: 'Fast movers (last 30 days)', description: 'Most frequently released items.',
     headers: ['SKU', 'Item', 'Category', 'Unit', 'Releases', 'Qty released', 'Value released (PHP)'],
@@ -57,7 +57,7 @@ function deadStock(db: DatabaseSync, now: string): ReportTable {
        WHERE i.active = 1 AND i.qty > 0 AND NOT EXISTS (SELECT 1 FROM movements m WHERE m.item_id = i.id AND m.created_at >= ?)
        ORDER BY value DESC, i.sku`,
     )
-    .all(daysBefore(now, 60)) as { sku: string; name: string; category: string; unit: string; qty: number; value: number; lastAt: string | null }[];
+    .all(manilaDaysWindowStart(now, 60)) as { sku: string; name: string; category: string; unit: string; qty: number; value: number; lastAt: string | null }[];
   return {
     key: 'dead-stock', title: 'Dead stock (no movement in 60 days)', description: 'Active items with stock on hand that have not moved.',
     headers: ['SKU', 'Item', 'Category', 'Unit', 'Qty on hand', 'Stock value (PHP)', 'Last movement'],

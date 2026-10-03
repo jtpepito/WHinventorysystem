@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { addDays, daysBefore, formatDayLabel, isDay, manilaAt, manilaDay, manilaDayStartUtc } from '@/lib/time';
+import { addDays, formatDayLabel, isDay, manilaAt, manilaDay, manilaDaysWindowStart, manilaDayStartUtc } from '@/lib/time';
 
 describe('Manila day math', () => {
   it('assigns 23:30 Manila to the same Manila day and 00:00 to the next', () => {
@@ -22,8 +22,10 @@ describe('Manila day math', () => {
   it('builds a Manila wall-clock instant', () => {
     expect(manilaAt('2026-10-02', 9, 15)).toBe('2026-10-02T01:15:00.000Z');
   });
-  it('subtracts whole days from an instant', () => {
-    expect(daysBefore('2026-10-31T00:00:00.000Z', 30)).toBe('2026-10-01T00:00:00.000Z');
+  it('starts an N-day window at Manila midnight, counting today as day 1', () => {
+    // Oct 2 noon Manila → 30 days = Sep 3 … Oct 2, starting Sep 3 00:00 Manila (Sep 2 16:00Z)
+    expect(manilaDaysWindowStart('2026-10-02T04:00:00.000Z', 30)).toBe('2026-09-02T16:00:00.000Z');
+    expect(manilaDaysWindowStart('2026-10-02T04:00:00.000Z', 1)).toBe('2026-10-01T16:00:00.000Z');
   });
   it('labels a day', () => {
     expect(formatDayLabel('2026-10-02')).toBe('Oct 2');

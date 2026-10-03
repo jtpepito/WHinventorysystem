@@ -42,6 +42,21 @@ describe('reports', () => {
     const t = buildReport(scenario().db, 'dead-stock', NOW);
     expect(t.rows).toEqual([['P-001', 'Latex White', 'Paint', 'pc', 4, 2400, '2026-07-01']]);
   });
+  it('fast movers counts 30 Manila calendar days, not a rolling 30×24h', () => {
+    const f = makeDb();
+    postReceipt(f.db, { supplierId: f.supplier, refNo: 'R', lines: [{ itemId: f.item, qty: 50, unitCost: 1 }] }, 'admin', '2026-08-01T00:00:00.000Z');
+    const rel = (at: string) => postRelease(f.db, { counterparty: 'X', refNo: 'D', lines: [{ itemId: f.item, qty: 1 }] }, 'admin', at);
+    rel('2026-09-02T10:00:00.000Z'); // Sep 2, 6 PM Manila: day 31 back — inside a rolling window, outside the calendar one
+    rel('2026-09-02T17:00:00.000Z'); // Sep 3, 1 AM Manila: day 30 back — counts
+    const t = buildReport(f.db, 'fast-movers', NOW); // NOW = Oct 2 noon Manila
+    expect(t.rows.map((r) => [r[0], r[4]])).toEqual([['T-001', 1]]);
+  });
+  it('dead stock uses 60 Manila calendar days', () => {
+    const f = makeDb();
+    // Aug 3, 6 PM Manila: day 61 back from Oct 2 — so the item counts as not moved in 60 days
+    postReceipt(f.db, { supplierId: f.supplier, refNo: 'R', lines: [{ itemId: f.item, qty: 5, unitCost: 1 }] }, 'admin', '2026-08-03T10:00:00.000Z');
+    expect(buildReport(f.db, 'dead-stock', NOW).rows.map((r) => r[0])).toEqual(['T-001']);
+  });
   it('low stock lists shortfall', () => {
     const t = buildReport(scenario().db, 'low-stock', NOW);
     expect(t.rows).toEqual([['T-002', 'Saw', 'Tools', 'pc', 7, 10, 3]]);
