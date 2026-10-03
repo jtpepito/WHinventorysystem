@@ -17,4 +17,8 @@ describe('roleForPassword', () => {
     expect(() => roleForPassword('x', { admin: 'same', encoder: 'same' })).toThrow(/must be different/);
     expect(() => roleForPassword('x', { admin: 'a' })).toThrow(/must both be set/);
   });
+  it('refuses the example passwords from .env.example', () => {
+    expect(() => roleForPassword('x', { admin: 'change-me-admin', encoder: 'staff-pass' })).toThrow(/example password/);
+    expect(() => roleForPassword('x', { admin: 'owner-pass', encoder: 'change-me-encoder' })).toThrow(/example password/);
+  });
 });
