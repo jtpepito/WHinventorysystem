@@ -50,7 +50,22 @@ Other PCs on the shop network can use `http://<this-pc's-ip>:3000`. Login cookie
 
 ## Backups
 
-Copy `data/inventory.db` (with the app stopped, or also copy the `-wal` file) to a USB drive or another PC.
+```bash
+npm run backup
+```
+
+This writes a dated copy such as `backups/inventory-2026-10-03_153005.db` (Manila time). It is safe while the app is running: it uses SQLite's `VACUUM INTO`, which takes a consistent snapshot including changes not yet written to the main file, then checks the copy's integrity and prints how many items and movements it holds. Don't back up by copying `data/inventory.db` while the app runs; that copy can be incomplete.
+
+- Save somewhere else: `npm run backup -- D:\InventoryBackups` (a USB drive or another PC's shared folder), or set `BACKUP_DIR` in `.env.local`.
+- Old backups are never deleted automatically; clear out the folder now and then.
+- **Daily backup on Windows:** in Task Scheduler, create a basic task that runs daily with program `cmd.exe` and arguments `/c cd /d "C:\path\to\Inventory" && npm run backup -- D:\InventoryBackups`.
+
+### Restoring a backup
+
+1. Stop the app.
+2. In `data/`, delete `inventory.db-wal` and `inventory.db-shm` if they exist, and rename `inventory.db` (e.g. to `inventory.before-restore.db`) in case you need it.
+3. Copy the backup file into `data/` and rename it to `inventory.db`.
+4. Start the app and open **Ledger check** to confirm everything matches.
 
 ## Development
 
