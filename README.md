@@ -33,6 +33,12 @@ Other PCs on the shop network can use `http://<this-pc's-ip>:3000`. Login cookie
 - **Admin** password: everything — dashboard, items, receive, release, count, movements, reports, settings, ledger check.
 - **Encoder** password: receive, release, count, and read-only items and movements.
 
+## Login lockout
+
+- 5 wrong passwords from one computer lock that computer out for 1 minute; repeat lockouts double (2, 4, 8 minutes) up to 15. A correct password clears the count, and 15 quiet minutes reset it.
+- 100 wrong passwords within 15 minutes from anywhere pause all logins for 5 minutes (a backstop against someone faking addresses).
+- Restarting the app clears every lockout.
+
 ## Rules the app enforces
 
 - On-hand qty is cached on each item and updated in the same transaction as each movement. **Ledger check** (`/debug`) compares it with the sum of movements and can rebuild it.
