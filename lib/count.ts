@@ -99,6 +99,15 @@ export function saveCountActuals(db: DatabaseSync, sessionId: number, entries: {
   });
 }
 
+// An open count is only a worksheet (nothing has touched stock yet), so discarding deletes it outright.
+export function discardCountSession(db: DatabaseSync, sessionId: number): void {
+  tx(db, () => {
+    openSession(db, sessionId);
+    db.prepare('DELETE FROM count_lines WHERE session_id = ?').run(sessionId);
+    db.prepare('DELETE FROM count_sessions WHERE id = ?').run(sessionId);
+  });
+}
+
 export function refreshExpected(db: DatabaseSync, sessionId: number): number {
   return tx(db, () => {
     openSession(db, sessionId);

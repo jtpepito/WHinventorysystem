@@ -74,6 +74,19 @@ export function CountSheet({ sessionId, lines }: { sessionId: number; lines: Cou
         >
           Post count
         </Button>
+        <Button
+          type="submit"
+          name="intent"
+          value="discard"
+          variant="ghost"
+          className="text-red-700 sm:ml-auto"
+          disabled={pending}
+          onClick={(e) => {
+            if (!confirm('Discard this count? The counts typed here are thrown away. Stock is not changed.')) e.preventDefault();
+          }}
+        >
+          Discard count
+        </Button>
       </div>
     </form>
   );

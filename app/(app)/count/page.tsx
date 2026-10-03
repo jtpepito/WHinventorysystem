@@ -10,13 +10,19 @@ import { getDb } from '@/lib/db';
 import { formatManila } from '@/lib/time';
 import { StartCountForm } from './start-count-form';
 
-export default async function CountPage() {
+export default async function CountPage({ searchParams }: { searchParams: Promise<{ discarded?: string }> }) {
   await requireRole('admin', 'encoder');
+  const { discarded } = await searchParams;
   const db = getDb();
   const sessions = listCountSessions(db);
   return (
     <>
       <PageHeader title="Physical count" description="Count shelves, type what you find, and post the variances as adjustments." />
+      {discarded && (
+        <p data-testid="form-message" role="status" className="mb-4 rounded-md border border-emerald-300 bg-emerald-50 px-3 py-2 text-sm text-emerald-900">
+          Count discarded. Nothing was posted.
+        </p>
+      )}
       <Card className="mb-6">
         <CardHeader><CardTitle className="text-base">Start a new count</CardTitle></CardHeader>
         <CardContent><StartCountForm categories={listNamed(db, 'categories')} /></CardContent>

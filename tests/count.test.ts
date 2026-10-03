@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { getCountSession, listCountSessions, postCountSession, refreshExpected, saveCountActuals, startCountSession } from '@/lib/count';
+import {
+  discardCountSession, getCountSession, listCountSessions, postCountSession, refreshExpected, saveCountActuals, startCountSession,
+} from '@/lib/count';
 import { ledgerCheck, postReceipt, postRelease } from '@/lib/inventory';
 import { type Fixture, makeDb, plain, qtyOf } from './helpers';
 
@@ -106,6 +108,28 @@ describe('count sessions', () => {
     f.db.prepare('UPDATE items SET active = 0 WHERE id = ?').run(f.item);
     expect(postCountSession(f.db, id, 'admin')).toEqual({ adjustments: 1 });
     expect(qtyOf(f.db, f.item)).toBe(18);
+  });
+  it('discards an open count without touching stock or the ledger', () => {
+    const f = stocked();
+    const keep = startCountSession(f.db, { categoryId: f.cat2 });
+    const id = startCountSession(f.db, { categoryId: f.cat });
+    saveCountActuals(f.db, id, [{ lineId: lineFor(f, id, f.item).lineId, actual: 3 }]);
+    const movementsBefore = { ...(f.db.prepare('SELECT COUNT(*) AS n FROM movements').get() as object) };
+    discardCountSession(f.db, id);
+    expect(getCountSession(f.db, id)).toBeNull();
+    expect(f.db.prepare('SELECT COUNT(*) AS n FROM count_lines WHERE session_id = ?').get(id)).toMatchObject({ n: 0 });
+    expect(listCountSessions(f.db).map((s) => s.id)).toEqual([keep]);
+    expect(qtyOf(f.db, f.item)).toBe(20);
+    expect({ ...(f.db.prepare('SELECT COUNT(*) AS n FROM movements').get() as object) }).toEqual(movementsBefore);
+  });
+  it('refuses to discard a posted or unknown count', () => {
+    const f = stocked();
+    const id = startCountSession(f.db, { categoryId: f.cat });
+    saveCountActuals(f.db, id, [{ lineId: lineFor(f, id, f.item).lineId, actual: 20 }]);
+    postCountSession(f.db, id, 'admin');
+    expect(() => discardCountSession(f.db, id)).toThrow('This count was already posted.');
+    expect(getCountSession(f.db, id)).not.toBeNull();
+    expect(() => discardCountSession(f.db, 999)).toThrow('Count session not found.');
   });
   it('lists sessions newest first with progress counts', () => {
     const f = stocked();
