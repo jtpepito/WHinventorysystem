@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
-  addNamed, addSupplier, createItem, deleteNamed, deleteSupplier, listNamed, listSuppliers, renameNamed, setReorderPoints, updateItem,
+  addNamed, addSupplier, createItem, deleteNamed, deleteSupplier, itemHasHistory, listNamed, listSuppliers, renameNamed, setReorderPoints, updateItem,
 } from '@/lib/catalog';
+import { startCountSession } from '@/lib/count';
+import { postReceipt } from '@/lib/inventory';
 import { makeDb } from './helpers';
 
 const get = (db: ReturnType<typeof makeDb>['db'], sql: string, id: number) => ({ ...(db.prepare(sql).get(id) as object) });
@@ -59,6 +61,31 @@ describe('items', () => {
     updateItem(db, item, { sku: 'T-001', name: 'Claw Hammer', categoryId: cat2, unitId: unit, reorderPoint: 3, active: false });
     expect(get(db, 'SELECT name, category_id, active, qty FROM items WHERE id = ?', item)).toEqual({ name: 'Claw Hammer', category_id: cat2, active: 0, qty: 0 });
     expect(() => updateItem(db, 999, { sku: 'Z', name: 'Z', categoryId: cat2, unitId: unit, reorderPoint: 0, active: true })).toThrow(/Item not found/);
+  });
+  it('refuses a unit change once the item has stock history, but allows other edits', () => {
+    const { db, item, cat, unit, supplier } = makeDb();
+    const box = addNamed(db, 'units', 'box');
+    postReceipt(db, { supplierId: supplier, refNo: 'R', lines: [{ itemId: item, qty: 5, unitCost: 10 }] }, 'admin');
+    const base = { sku: 'T-001', name: 'Hammer', categoryId: cat, unitId: unit, reorderPoint: 0, active: true };
+    expect(() => updateItem(db, item, { ...base, unitId: box })).toThrow(
+      "Can't change the unit of T-001 Hammer from pc: its stock history is recorded in pc. Create a new item for the new unit instead.",
+    );
+    updateItem(db, item, { ...base, name: 'Claw Hammer', reorderPoint: 2 });
+    expect(get(db, 'SELECT name, unit_id FROM items WHERE id = ?', item)).toEqual({ name: 'Claw Hammer', unit_id: unit });
+  });
+  it('counts an open count as history too', () => {
+    const { db, item, cat } = makeDb();
+    const box = addNamed(db, 'units', 'box');
+    startCountSession(db, { categoryId: cat });
+    expect(() => updateItem(db, item, { sku: 'T-001', name: 'Hammer', categoryId: cat, unitId: box, reorderPoint: 0, active: true })).toThrow(/Can't change the unit/);
+    expect(itemHasHistory(db, item)).toBe(true);
+  });
+  it('allows a unit change while the item has no history', () => {
+    const { db, item, cat } = makeDb();
+    const box = addNamed(db, 'units', 'box');
+    expect(itemHasHistory(db, item)).toBe(false);
+    updateItem(db, item, { sku: 'T-001', name: 'Hammer', categoryId: cat, unitId: box, reorderPoint: 0, active: true });
+    expect(get(db, 'SELECT unit_id FROM items WHERE id = ?', item)).toEqual({ unit_id: box });
   });
   it('bulk-sets reorder points atomically', () => {
     const { db, item, item2 } = makeDb();

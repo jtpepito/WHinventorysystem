@@ -11,7 +11,8 @@ import { createItemAction, updateItemAction } from './actions';
 type Option = { id: number; name: string };
 export type ItemFormValues = { id?: number; sku: string; name: string; categoryId: string; unitId: string; reorderPoint: string; active: boolean };
 
-export function ItemForm({ initial, categories, units }: { initial: ItemFormValues; categories: Option[]; units: Option[] }) {
+// unitLocked: the item already has stock history, so its unit can't change (the server refuses it too).
+export function ItemForm({ initial, categories, units, unitLocked = false }: { initial: ItemFormValues; categories: Option[]; units: Option[]; unitLocked?: boolean }) {
   const [state, action, pending] = useActionState(initial.id ? updateItemAction : createItemAction, null);
   const [v, setV] = useState(initial);
   const set = (patch: Partial<ItemFormValues>) => setV((cur) => ({ ...cur, ...patch }));
@@ -42,10 +43,27 @@ export function ItemForm({ initial, categories, units }: { initial: ItemFormValu
         </div>
         <div className="space-y-2">
           <Label htmlFor="unitId">Unit</Label>
-          <NativeSelect id="unitId" name="unitId" value={v.unitId} onChange={(e) => set({ unitId: e.target.value })} required>
+          <NativeSelect
+            id="unitId"
+            name={unitLocked ? undefined : 'unitId'}
+            value={v.unitId}
+            onChange={(e) => set({ unitId: e.target.value })}
+            disabled={unitLocked}
+            aria-describedby={unitLocked ? 'unit-locked' : undefined}
+            required
+          >
             <option value="" disabled>Pick a unit…</option>
             {units.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
           </NativeSelect>
+          {unitLocked && (
+            <>
+              {/* A disabled select isn't submitted, so send the unchanged unit explicitly. */}
+              <input type="hidden" name="unitId" value={v.unitId} />
+              <p id="unit-locked" className="text-xs text-muted-foreground">
+                Locked: this item already has stock history in {units.find((u) => String(u.id) === v.unitId)?.name}.
+              </p>
+            </>
+          )}
         </div>
       </div>
       <label className="flex items-center gap-2 text-sm">

@@ -104,9 +104,24 @@ export function createItem(db: DatabaseSync, input: ItemInput): number {
   );
 }
 
+// Movements and count lines hold quantities in the item's unit, so once either exists the unit is fixed.
+export function itemHasHistory(db: DatabaseSync, id: number): boolean {
+  return !!db
+    .prepare('SELECT EXISTS (SELECT 1 FROM movements WHERE item_id = ?) OR EXISTS (SELECT 1 FROM count_lines WHERE item_id = ?) AS h')
+    .get(id, id)?.h;
+}
+
 export function updateItem(db: DatabaseSync, id: number, input: ItemInput): void {
-  if (!db.prepare('SELECT 1 FROM items WHERE id = ?').get(id)) throw new InventoryError('Item not found.');
+  const current = db
+    .prepare('SELECT i.sku, i.name, i.unit_id AS unitId, u.name AS unit FROM items i JOIN units u ON u.id = i.unit_id WHERE i.id = ?')
+    .get(id) as { sku: string; name: string; unitId: number; unit: string } | undefined;
+  if (!current) throw new InventoryError('Item not found.');
   const i = cleanItem(db, input, id);
+  if (i.unitId !== current.unitId && itemHasHistory(db, id)) {
+    throw new InventoryError(
+      `Can't change the unit of ${current.sku} ${current.name} from ${current.unit}: its stock history is recorded in ${current.unit}. Create a new item for the new unit instead.`,
+    );
+  }
   db.prepare('UPDATE items SET sku = ?, name = ?, category_id = ?, unit_id = ?, reorder_point = ?, active = ? WHERE id = ?')
     .run(i.sku, i.name, i.categoryId, i.unitId, i.reorderPoint, i.active ? 1 : 0, id);
 }

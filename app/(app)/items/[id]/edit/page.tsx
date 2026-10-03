@@ -1,7 +1,7 @@
 import { notFound } from 'next/navigation';
 import { PageHeader } from '@/components/page-header';
 import { requireRole } from '@/lib/auth';
-import { listNamed } from '@/lib/catalog';
+import { itemHasHistory, listNamed } from '@/lib/catalog';
 import { getDb } from '@/lib/db';
 import { getItem } from '@/lib/queries';
 import { ItemForm } from '../../item-form';
@@ -19,6 +19,7 @@ export default async function EditItemPage({ params }: { params: Promise<{ id: s
         initial={{ id: item.id, sku: item.sku, name: item.name, categoryId: String(item.categoryId), unitId: String(item.unitId), reorderPoint: String(item.reorderPoint), active: item.active }}
         categories={listNamed(db, 'categories')}
         units={listNamed(db, 'units')}
+        unitLocked={itemHasHistory(db, item.id)}
       />
     </>
   );
