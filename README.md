@@ -28,6 +28,25 @@ Open http://localhost:3000. The database (`data/inventory.db`) is created on fir
 
 Other PCs on the shop network can use `http://<this-pc's-ip>:3000`. Login cookies work over plain HTTP; set `COOKIE_SECURE=1` only if you put the app behind HTTPS.
 
+## Start automatically on Windows
+
+A scheduled task named **Inventory app** starts the app, hidden, whenever you sign in to Windows. It serves on port **3005** (set `PORT` to change it), logs to `logs\app.log`, and restarts the server within about 10 seconds if it crashes.
+
+- **Stop:** double-click `scripts\stop-app.cmd`. Ending the task in Task Scheduler is *not* enough; it leaves the server running.
+- **Restart** (needed after every `npm run build`): double-click `scripts\restart-app.cmd`.
+- Only one copy runs at a time; starting it again while it's up does nothing.
+
+To create the task on another PC (PowerShell, from the Inventory folder):
+
+```powershell
+$dir = (Get-Location).Path
+$ps = "`$p = Start-Process cmd.exe -ArgumentList '/c scripts\start-app.cmd' -WorkingDirectory '$dir' -WindowStyle Hidden -Wait -PassThru; exit `$p.ExitCode"
+$action = New-ScheduledTaskAction -Execute powershell.exe -Argument "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -Command `"$ps`"" -WorkingDirectory $dir
+$trigger = New-ScheduledTaskTrigger -AtLogOn -User "$env:USERDOMAIN\$env:USERNAME"
+$settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -ExecutionTimeLimit ([TimeSpan]::Zero) -MultipleInstances IgnoreNew -StartWhenAvailable
+Register-ScheduledTask -TaskName 'Inventory app' -Action $action -Trigger $trigger -Settings $settings
+```
+
 ## Roles
 
 - **Admin** password: everything — dashboard, items, receive, release, count, movements, reports, settings, ledger check.

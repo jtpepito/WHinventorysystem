@@ -37,6 +37,7 @@ yarn-error.log*
 # app data and test output
 /data/
 /backups/
+/logs/
 /test-results/
 /playwright-report/
 /.superpowers/
