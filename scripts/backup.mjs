@@ -8,9 +8,10 @@ const outDir = path.resolve(process.argv[2] ?? process.env.BACKUP_DIR ?? 'backup
 
 try {
   const r = backupDatabase(dbPath, outDir, new Date());
-  console.log(`Backup saved: ${r.file}`);
-  console.log(`  ${(r.bytes / 1024).toFixed(0)} KB · ${r.items} items · ${r.movements} movements · integrity ok`);
+  // ASCII only: the scheduled task appends this to a log that Windows tools may read as ANSI.
+  console.log(`${new Date().toISOString()} Backup saved: ${r.file}`);
+  console.log(`  ${(r.bytes / 1024).toFixed(0)} KB, ${r.items} items, ${r.movements} movements, integrity ok`);
 } catch (e) {
-  console.error(`Backup failed: ${e instanceof Error ? e.message : e}`);
+  console.error(`${new Date().toISOString()} Backup failed: ${e instanceof Error ? e.message : e}`);
   process.exit(1);
 }
