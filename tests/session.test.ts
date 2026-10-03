@@ -29,7 +29,7 @@ describe('canAccess', () => {
   });
   it('limits encoder to receive/release/count/items/movements, read-only items', () => {
     for (const p of ['/receive', '/release', '/count', '/count/4', '/items', '/items/12', '/movements']) expect(canAccess('encoder', p)).toBe(true);
-    for (const p of ['/dashboard', '/reports', '/reports/csv/low-stock', '/settings', '/debug', '/items/new', '/items/12/edit', '/receivex']) {
+    for (const p of ['/dashboard', '/reports', '/reports/csv/low-stock', '/settings', '/debug', '/items/new', '/items/12/edit', '/items/import', '/items/import/template', '/receivex']) {
       expect(canAccess('encoder', p)).toBe(false);
     }
   });

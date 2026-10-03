@@ -25,14 +25,31 @@ export default async function ItemsPage({ searchParams }: { searchParams: SP }) 
   const db = getDb();
   const items = listItems(db, { q: q || undefined, categoryId: category, status });
   const categories = listNamed(db, 'categories');
+  // Set by the CSV import's redirect.
+  const imported = Number(one(sp.imported));
+  const stocked = Number(one(sp.stocked));
+  const openingRef = one(sp.ref);
 
   return (
     <>
       <PageHeader
         title="Items"
         description={`${items.length} item(s)`}
-        actions={role === 'admin' && <Link prefetch={false} href="/items/new" className={buttonVariants()}>New item</Link>}
+        actions={
+          role === 'admin' && (
+            <>
+              <Link prefetch={false} href="/items/import" className={buttonVariants({ variant: 'outline' })}>Import from CSV</Link>
+              <Link prefetch={false} href="/items/new" className={buttonVariants()}>New item</Link>
+            </>
+          )
+        }
       />
+      {imported > 0 && (
+        <p data-testid="form-message" role="status" className="mb-4 rounded-md border border-emerald-300 bg-emerald-50 px-3 py-2 text-sm text-emerald-900">
+          Imported {imported} item{imported === 1 ? '' : 's'}.{' '}
+          {stocked > 0 && openingRef ? `Opening stock for ${stocked} posted under ${openingRef}.` : 'No opening stock was posted.'}
+        </p>
+      )}
       <form className="mb-4 grid gap-2 sm:grid-cols-[1fr_12rem_10rem_auto]" role="search">
         <Input name="q" defaultValue={q} placeholder="Search SKU or name" aria-label="Search" />
         <NativeSelect name="category" defaultValue={category ?? ''} aria-label="Category">

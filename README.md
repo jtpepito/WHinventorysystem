@@ -52,6 +52,16 @@ Register-ScheduledTask -TaskName 'Inventory app' -Action $action -Trigger $trigg
 - **Admin** password: everything — dashboard, items, receive, release, count, movements, reports, settings, ledger check.
 - **Encoder** password: receive, release, count, and read-only items and movements.
 
+## Importing items from Excel
+
+Admins can add many items at once under **Items → Import from CSV**:
+
+1. In Excel, save your stock list as **CSV UTF-8** (or start from the template on that page). Required headings: SKU, Name, Category, Unit. Optional: Reorder point, Qty on hand, Unit cost (needed when there is stock). Common variations such as "Item code", "UOM" or "Qty" are recognised.
+2. Upload it and press **Preview**. Every row is checked and nothing is saved yet; problem rows are listed first with the reason.
+3. Press **Import**. All rows are saved together, or none are. Opening stock is posted as one receipt dated today (reference `OPENING-<date>`, supplier "Opening balance"), which also sets each item's average cost.
+
+New categories and units in the file are created (the preview lists them, so check for typos). Only new SKUs can be imported; existing SKUs are flagged. Up to 2,000 rows per file.
+
 ## Login lockout
 
 - 5 wrong passwords from one computer lock that computer out for 1 minute; repeat lockouts double (2, 4, 8 minutes) up to 15. A correct password clears the count, and 15 quiet minutes reset it.

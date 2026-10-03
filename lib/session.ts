@@ -44,6 +44,7 @@ const ENCODER_PREFIXES = ['/receive', '/release', '/count', '/items', '/movement
 export function canAccess(role: Role, pathname: string): boolean {
   if (role === 'admin') return true;
   if (pathname === '/items/new' || /^\/items\/[^/]+\/edit\/?$/.test(pathname)) return false;
+  if (pathname === '/items/import' || pathname.startsWith('/items/import/')) return false;
   return ENCODER_PREFIXES.some((p) => pathname === p || pathname.startsWith(`${p}/`));
 }
 

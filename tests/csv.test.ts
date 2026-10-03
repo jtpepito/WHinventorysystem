@@ -1,5 +1,25 @@
 import { describe, expect, it } from 'vitest';
-import { toCsv } from '@/lib/csv';
+import { parseCsv, toCsv } from '@/lib/csv';
+
+describe('parseCsv', () => {
+  it('reads plain rows with CRLF or LF and drops a trailing blank line', () => {
+    expect(parseCsv('a,b\r\n1,2\r\n')).toEqual([['a', 'b'], ['1', '2']]);
+    expect(parseCsv('a,b\n1,2')).toEqual([['a', 'b'], ['1', '2']]);
+  });
+  it('strips a UTF-8 BOM (Excel "CSV UTF-8")', () => {
+    expect(parseCsv('﻿SKU,Name\nA,B')).toEqual([['SKU', 'Name'], ['A', 'B']]);
+  });
+  it('handles quotes, doubled quotes, commas and newlines inside quotes', () => {
+    expect(parseCsv('"Pipe 1/2"", blue","two\nlines",x')).toEqual([['Pipe 1/2", blue', 'two\nlines', 'x']]);
+  });
+  it('keeps empty cells and skips fully blank lines', () => {
+    expect(parseCsv('a,,c\n\n,,\nd,e,f')).toEqual([['a', '', 'c'], ['d', 'e', 'f']]);
+  });
+  it('round-trips what toCsv writes, removing its formula guard', () => {
+    const out = toCsv(['T', 'N'], [['=SUM(A1)', 5], ['₱75, ok', null]]);
+    expect(parseCsv(out)).toEqual([['T', 'N'], ['=SUM(A1)', '5'], ['₱75, ok', '']]);
+  });
+});
 
 describe('toCsv', () => {
   it('starts with a BOM and uses CRLF', () => {

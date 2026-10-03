@@ -8,7 +8,11 @@ export type Named = { id: number; name: string; inUse: number };
 export type Supplier = { id: number; name: string; contact: string };
 export type ItemInput = { sku: string; name: string; categoryId: number; unitId: number; reorderPoint: number; active: boolean };
 
-const LABEL: Record<NamedTable, string> = { categories: 'Category', units: 'Unit' };
+// SKUs are stored upper-case; shared with the CSV import so both check the same way.
+export const SKU_PATTERN = /^[A-Z0-9][A-Z0-9._-]{0,31}$/;
+export const SKU_MESSAGE = 'SKU must be 1–32 letters, numbers, dots, dashes or underscores.';
+
+const LABEL: Record<NamedTable, string> ={ categories: 'Category', units: 'Unit' };
 const ITEM_COL: Record<NamedTable, string> = { categories: 'category_id', units: 'unit_id' };
 
 function cleanName(raw: string, what: string, max = 60): string {
@@ -87,7 +91,7 @@ function checkReorderPoint(n: number, label: string): number {
 
 function cleanItem(db: DatabaseSync, input: ItemInput, exceptId = 0): ItemInput {
   const sku = (input.sku ?? '').trim().toUpperCase();
-  if (!/^[A-Z0-9][A-Z0-9._-]{0,31}$/.test(sku)) throw new InventoryError('SKU must be 1–32 letters, numbers, dots, dashes or underscores.');
+  if (!SKU_PATTERN.test(sku)) throw new InventoryError(SKU_MESSAGE);
   const name = cleanName(input.name, 'Item', 120);
   if (!db.prepare('SELECT 1 FROM categories WHERE id = ?').get(input.categoryId)) throw new InventoryError('Pick a category.');
   if (!db.prepare('SELECT 1 FROM units WHERE id = ?').get(input.unitId)) throw new InventoryError('Pick a unit.');
