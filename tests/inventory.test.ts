@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  InventoryError, ledgerCheck, postAdjustment, postReceipt, postRelease, rebuildCachedQty, weightedAverage,
+  duplicateRefWarning, InventoryError, ledgerCheck, postAdjustment, postReceipt, postRelease, rebuildCachedQty, weightedAverage,
 } from '@/lib/inventory';
 import { avgOf, type Fixture, makeDb, qtyOf } from './helpers';
 
@@ -117,6 +117,44 @@ describe('postAdjustment', () => {
     expect(qtyOf(f.db, f.item)).toBe(2);
     expect(() => postAdjustment(f.db, { itemId: f.item, qtyDelta: -3, refNo: 'X', note: 'x' }, 'admin')).toThrow(/below zero/);
     expect(() => postAdjustment(f.db, { itemId: f.item, qtyDelta: 0, refNo: 'X', note: 'x' }, 'admin')).toThrow(InventoryError);
+  });
+});
+
+describe('duplicateRefWarning', () => {
+  function withSecondSupplier(f: Fixture) {
+    return Number(f.db.prepare("INSERT INTO suppliers (name) VALUES ('Other Supply')").run().lastInsertRowid);
+  }
+  it('flags a receipt reference already used by the same supplier, ignoring case and spaces', () => {
+    const f = makeDb();
+    expect(duplicateRefWarning(f.db, { type: 'receive', refNo: 'INV-9', supplierId: f.supplier })).toBeNull();
+    postReceipt(f.db, { supplierId: f.supplier, refNo: 'INV-9', lines: [{ itemId: f.item, qty: 1, unitCost: 1 }, { itemId: f.item2, qty: 1, unitCost: 1 }] }, 'admin', '2026-10-02T01:15:00.000Z');
+    expect(duplicateRefWarning(f.db, { type: 'receive', refNo: ' inv-9 ', supplierId: f.supplier })).toBe(
+      'Reference INV-9 from Acme Supply was already received on Oct 2, 2026, 9:15 AM (2 lines). Check this isn\'t the same delivery entered twice.',
+    );
+  });
+  it('allows the same receipt reference from a different supplier', () => {
+    const f = makeDb();
+    const other = withSecondSupplier(f);
+    receive(f, f.item, 1, 1, 'INV-9');
+    expect(duplicateRefWarning(f.db, { type: 'receive', refNo: 'INV-9', supplierId: other })).toBeNull();
+  });
+  it('flags a release reference used before, whatever the destination', () => {
+    const f = makeDb();
+    receive(f, f.item, 10, 1);
+    postRelease(f.db, { counterparty: 'Walk-in', refNo: 'DR-5', lines: [{ itemId: f.item, qty: 1 }] }, 'encoder', '2026-10-02T01:15:00.000Z');
+    expect(duplicateRefWarning(f.db, { type: 'release', refNo: 'dr-5' })).toBe(
+      'Reference DR-5 was already used for a release to Walk-in on Oct 2, 2026, 9:15 AM (1 line). Check this isn\'t the same release entered twice.',
+    );
+    expect(duplicateRefWarning(f.db, { type: 'release', refNo: 'DR-6' })).toBeNull();
+  });
+  it('does not mix receipts and releases', () => {
+    const f = makeDb();
+    receive(f, f.item, 10, 1, 'X-1');
+    expect(duplicateRefWarning(f.db, { type: 'release', refNo: 'X-1' })).toBeNull();
+  });
+  it('ignores a blank reference (required-field errors handle that)', () => {
+    const f = makeDb();
+    expect(duplicateRefWarning(f.db, { type: 'release', refNo: '  ' })).toBeNull();
   });
 });
 

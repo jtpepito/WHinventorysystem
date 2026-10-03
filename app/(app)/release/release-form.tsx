@@ -3,6 +3,7 @@
 import { useActionState, useEffect, useState } from 'react';
 import { FormMessage } from '@/components/form-message';
 import { NativeSelect } from '@/components/native-select';
+import { PostAnywayButton } from '@/components/post-anyway-button';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -87,8 +88,10 @@ export function ReleaseForm({ items }: { items: ItemOption[] }) {
       </div>
 
       <input type="hidden" name="lines" value={JSON.stringify(lines.map(({ itemId, qty }) => ({ itemId, qty })))} />
-      <div className="flex justify-end border-t pt-4">
+      <div className="flex justify-end gap-2 border-t pt-4">
+        {/* Main button first: Enter submits with the first submit button, and must not skip the warning. */}
         <Button type="submit" disabled={pending}>{pending ? 'Posting…' : 'Post release'}</Button>
+        <PostAnywayButton state={state} refNo={refNo} pending={pending} />
       </div>
       <FormMessage state={state} />
     </form>

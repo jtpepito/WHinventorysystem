@@ -3,6 +3,7 @@
 import { useActionState, useEffect, useState } from 'react';
 import { FormMessage } from '@/components/form-message';
 import { NativeSelect } from '@/components/native-select';
+import { PostAnywayButton } from '@/components/post-anyway-button';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -103,7 +104,11 @@ export function ReceiveForm({ items, suppliers }: { items: ItemOption[]; supplie
       <input type="hidden" name="lines" value={JSON.stringify(lines.map(({ itemId, qty, unitCost }) => ({ itemId, qty, unitCost })))} />
       <div className="flex flex-wrap items-center justify-between gap-3 border-t pt-4">
         <p className="text-sm">Total <span className="ml-2 text-lg font-semibold tabular-nums">{formatPeso(total)}</span></p>
-        <Button type="submit" disabled={pending}>{pending ? 'Posting…' : 'Post receipt'}</Button>
+        <div className="flex gap-2">
+          {/* Main button first: Enter submits with the first submit button, and must not skip the warning. */}
+          <Button type="submit" disabled={pending}>{pending ? 'Posting…' : 'Post receipt'}</Button>
+          <PostAnywayButton state={state} refNo={refNo} pending={pending} />
+        </div>
       </div>
       <FormMessage state={state} />
     </form>

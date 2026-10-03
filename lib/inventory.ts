@@ -1,7 +1,7 @@
 import type { DatabaseSync } from 'node:sqlite';
 import { formatQty, round } from './num';
 import { tx } from './sqlite';
-import { nowIso } from './time';
+import { formatManila, nowIso } from './time';
 
 export type Actor = 'admin' | 'encoder';
 export type MovementType = 'receive' | 'release' | 'adjust';
@@ -150,7 +150,33 @@ export function postAdjustment(
   });
 }
 
-export type LedgerRow = { itemId: number; sku: string; name: string; cached: number; ledger: number; match: boolean };
+export type DuplicateRefQuery = { type: 'receive'; refNo: string; supplierId: number } | { type: 'release'; refNo: string };
+
+// Soft check before posting: has this reference been posted before? Receipts match per supplier
+// (suppliers can share invoice numbers); releases match on the shop's own DR number alone.
+export function duplicateRefWarning(db: DatabaseSync, q: DuplicateRefQuery): string | null {
+  const refNo = q.refNo.trim();
+  if (!refNo) return null;
+  let sql = `SELECT ref_no AS refNo, counterparty, created_at AS at, COUNT(*) AS lines FROM movements
+    WHERE type = ? AND ref_no = ? COLLATE NOCASE`;
+  const params: (string | number)[] = [q.type, refNo];
+  if (q.type === 'receive') {
+    const s = db.prepare('SELECT name FROM suppliers WHERE id = ?').get(q.supplierId) as { name: string } | undefined;
+    if (!s) return null;
+    sql += ' AND counterparty = ? COLLATE NOCASE';
+    params.push(s.name);
+  }
+  // Lines of one posting share a timestamp; report the most recent posting.
+  sql += ' GROUP BY created_at, counterparty ORDER BY created_at DESC LIMIT 1';
+  const hit = db.prepare(sql).get(...params) as { refNo: string; counterparty: string; at: string; lines: number } | undefined;
+  if (!hit) return null;
+  const lines = `${hit.lines} line${hit.lines === 1 ? '' : 's'}`;
+  return q.type === 'receive'
+    ? `Reference ${hit.refNo} from ${hit.counterparty} was already received on ${formatManila(hit.at)} (${lines}). Check this isn't the same delivery entered twice.`
+    : `Reference ${hit.refNo} was already used for a release to ${hit.counterparty} on ${formatManila(hit.at)} (${lines}). Check this isn't the same release entered twice.`;
+}
+
+export type LedgerRow ={ itemId: number; sku: string; name: string; cached: number; ledger: number; match: boolean };
 
 export function ledgerCheck(db: DatabaseSync): LedgerRow[] {
   const rows = db
