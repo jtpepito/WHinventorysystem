@@ -74,7 +74,8 @@ function optionalText(raw: string | undefined, max: number): string {
   return (raw ?? '').trim().slice(0, max);
 }
 
-export type ReceiptLine = { itemId: number; qty: number; unitCost: number };
+// label: the row name the user saw (e.g. "Line 3"), so errors point at the right row even after blank rows are dropped.
+export type ReceiptLine = { itemId: number; qty: number; unitCost: number; label?: string };
 export type ReceiptInput = { supplierId: number; refNo: string; note?: string; lines: ReceiptLine[] };
 
 export function postReceipt(db: DatabaseSync, input: ReceiptInput, actor: Actor, at = nowIso()): number[] {
@@ -85,7 +86,7 @@ export function postReceipt(db: DatabaseSync, input: ReceiptInput, actor: Actor,
     const supplier = db.prepare('SELECT name FROM suppliers WHERE id = ?').get(input.supplierId) as { name: string } | undefined;
     if (!supplier) throw new InventoryError('Pick a supplier.');
     return input.lines.map((line, i) => {
-      const label = `Line ${i + 1}`;
+      const label = line.label ?? `Line ${i + 1}`;
       const qty = checkQty(line.qty, label);
       const cost = checkCost(line.unitCost, label);
       const item = loadItem(db, line.itemId, label);
@@ -96,7 +97,7 @@ export function postReceipt(db: DatabaseSync, input: ReceiptInput, actor: Actor,
   });
 }
 
-export type ReleaseLine = { itemId: number; qty: number };
+export type ReleaseLine = { itemId: number; qty: number; label?: string };
 export type ReleaseInput = { counterparty: string; refNo: string; note?: string; lines: ReleaseLine[] };
 
 export function postRelease(db: DatabaseSync, input: ReleaseInput, actor: Actor, at = nowIso()): number[] {
@@ -108,7 +109,7 @@ export function postRelease(db: DatabaseSync, input: ReleaseInput, actor: Actor,
     // Check stock against the total per item, so two lines of the same item can't sneak past.
     const wanted = new Map<number, number>();
     const checked = input.lines.map((line, i) => {
-      const label = `Line ${i + 1}`;
+      const label = line.label ?? `Line ${i + 1}`;
       const qty = checkQty(line.qty, label);
       loadItem(db, line.itemId, label);
       wanted.set(line.itemId, round((wanted.get(line.itemId) ?? 0) + qty, 3));

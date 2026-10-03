@@ -39,6 +39,7 @@ export function parseReceiptLines(raw: string): ReceiptLine[] {
     itemId: itemIdOf(row.itemId, label),
     qty: num(row.qty, `${label}: enter a valid quantity.`),
     unitCost: num(row.unitCost, `${label}: enter a valid unit cost.`),
+    label,
   }));
 }
 
@@ -46,6 +47,7 @@ export function parseReleaseLines(raw: string): ReleaseLine[] {
   return rows(raw, ['itemId', 'qty']).map(({ label, row }) => ({
     itemId: itemIdOf(row.itemId, label),
     qty: num(row.qty, `${label}: enter a valid quantity.`),
+    label,
   }));
 }
 
