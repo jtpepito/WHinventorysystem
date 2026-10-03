@@ -8,7 +8,9 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { requireRole } from '@/lib/auth';
 import { getDb } from '@/lib/db';
 import { formatPeso, formatQty } from '@/lib/num';
-import { getItem, listMovements } from '@/lib/queries';
+import { getItem, listMovementsPage } from '@/lib/queries';
+
+const HISTORY_LIMIT = 300;
 
 function Stat({ label, children }: { label: string; children: React.ReactNode }) {
   return (
@@ -25,7 +27,7 @@ export default async function ItemCard({ params }: { params: Promise<{ id: strin
   const db = getDb();
   const item = Number.isInteger(id) ? getItem(db, id) : null;
   if (!item) notFound();
-  const movements = listMovements(db, { itemId: item.id, limit: 300 });
+  const history = listMovementsPage(db, { itemId: item.id }, HISTORY_LIMIT);
   return (
     <>
       <PageHeader
@@ -45,7 +47,13 @@ export default async function ItemCard({ params }: { params: Promise<{ id: strin
         <Stat label="Reorder point">{formatQty(item.reorderPoint)} <span className="text-sm font-normal">{item.unit}</span></Stat>
       </div>
       <h2 className="mb-2 text-lg font-semibold">Movement history</h2>
-      <MovementTable rows={movements} showItem={false} />
+      {history.truncated && (
+        <p data-testid="history-truncated" className="mb-2 text-xs text-muted-foreground">
+          Showing the latest {HISTORY_LIMIT} movements.{' '}
+          <Link prefetch={false} href={`/movements?item=${item.id}`} className="underline">See all in Movements</Link>
+        </p>
+      )}
+      <MovementTable rows={history.rows} showItem={false} />
     </>
   );
 }

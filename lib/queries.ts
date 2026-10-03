@@ -54,6 +54,12 @@ export type MovementRow = {
 };
 export type MovementFilter = { itemId?: number; type?: MovementType; from?: string; to?: string; limit?: number };
 
+// The newest `limit` movements, and whether older ones exist (fetches one extra row to know).
+export function listMovementsPage(db: DatabaseSync, f: Omit<MovementFilter, 'limit'>, limit: number): { rows: MovementRow[]; truncated: boolean } {
+  const rows = listMovements(db, { ...f, limit: limit + 1 });
+  return { rows: rows.slice(0, limit), truncated: rows.length > limit };
+}
+
 export function listMovements(db: DatabaseSync, f: MovementFilter = {}): MovementRow[] {
   const where: string[] = [];
   const params: (string | number)[] = [];

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { dashboardStats, inOutLast7Days } from '@/lib/dashboard';
 import { postReceipt, postRelease } from '@/lib/inventory';
-import { getItem, listItems, listMovements } from '@/lib/queries';
+import { getItem, listItems, listMovements, listMovementsPage } from '@/lib/queries';
 import { makeDb } from './helpers';
 
 describe('listItems', () => {
@@ -48,6 +48,25 @@ describe('listMovements', () => {
       expect.objectContaining({ type: 'release', sku: 'T-001', itemName: 'Hammer', unit: 'pc', qtyDelta: -2, unitCost: 2, refNo: 'D', counterparty: 'Walk-in', actor: 'encoder' }),
     ]);
     expect(listMovements(f.db, { limit: 1 })).toHaveLength(1);
+  });
+});
+
+describe('listMovementsPage', () => {
+  function withMovements(n: number) {
+    const f = makeDb();
+    for (let i = 0; i < n; i++) {
+      postReceipt(f.db, { supplierId: f.supplier, refNo: `R-${i}`, lines: [{ itemId: f.item, qty: 1, unitCost: 1 }] }, 'admin', `2026-10-01T00:00:${String(i).padStart(2, '0')}.000Z`);
+    }
+    return f;
+  }
+  it('reports truncation only when more rows exist than the limit', () => {
+    const exact = withMovements(3);
+    expect(listMovementsPage(exact.db, { itemId: exact.item }, 3)).toMatchObject({ truncated: false });
+    expect(listMovementsPage(exact.db, { itemId: exact.item }, 3).rows).toHaveLength(3);
+    const more = withMovements(4);
+    const page = listMovementsPage(more.db, { itemId: more.item }, 3);
+    expect(page.truncated).toBe(true);
+    expect(page.rows.map((r) => r.refNo)).toEqual(['R-3', 'R-2', 'R-1']);
   });
 });
 

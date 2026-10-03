@@ -7,7 +7,7 @@ import { Label } from '@/components/ui/label';
 import { requireRole } from '@/lib/auth';
 import { getDb } from '@/lib/db';
 import { isMovementType } from '@/lib/inventory';
-import { listItems, listMovements } from '@/lib/queries';
+import { listItems, listMovementsPage } from '@/lib/queries';
 import { isDay } from '@/lib/time';
 
 type SP = Promise<Record<string, string | string[] | undefined>>;
@@ -23,7 +23,7 @@ export default async function MovementsPage({ searchParams }: { searchParams: SP
   const from = isDay(one(sp.from)) ? one(sp.from) : undefined;
   const to = isDay(one(sp.to)) ? one(sp.to) : undefined;
   const db = getDb();
-  const rows = listMovements(db, { itemId, type, from, to, limit: LIMIT });
+  const { rows, truncated } = listMovementsPage(db, { itemId, type, from, to }, LIMIT);
   const items = listItems(db);
 
   return (
@@ -50,7 +50,7 @@ export default async function MovementsPage({ searchParams }: { searchParams: SP
         <div className="space-y-1"><Label htmlFor="to">To</Label><Input id="to" name="to" type="date" defaultValue={to} /></div>
         <Button type="submit" variant="secondary">Filter</Button>
       </form>
-      {rows.length === LIMIT && <p className="mb-2 text-xs text-muted-foreground">Showing the latest {LIMIT}. Narrow the filters to see older entries.</p>}
+      {truncated && <p className="mb-2 text-xs text-muted-foreground">Showing the latest {LIMIT}. Narrow the filters to see older entries.</p>}
       <MovementTable rows={rows} />
     </>
   );
