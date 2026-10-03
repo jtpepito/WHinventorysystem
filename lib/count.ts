@@ -7,7 +7,11 @@ import { nowIso } from './time';
 export type CountLineView = {
   lineId: number; itemId: number; sku: string; name: string; unit: string;
   expected: number; actual: number | null; variance: number | null; currentQty: number;
+  // Any movement for this item since the count started (or was refreshed), even one that netted to zero.
+  moved: boolean;
 };
+
+const lastMovementId = (db: DatabaseSync) => (db.prepare('SELECT COALESCE(MAX(id), 0) AS id FROM movements').get() as { id: number }).id;
 export type CountSessionView = { id: number; scope: string; startedAt: string; postedAt: string | null; lines: CountLineView[] };
 export type CountSessionSummary = {
   id: number; scope: string; startedAt: string; postedAt: string | null; lineCount: number; countedCount: number; varianceCount: number;
@@ -28,7 +32,9 @@ export function startCountSession(db: DatabaseSync, scope: { categoryId: number 
     ) as { id: number; qty: number }[];
     if (items.length === 0) throw new InventoryError('There are no active items to count in that category.');
     const id = Number(
-      db.prepare('INSERT INTO count_sessions (scope, category_id, started_at) VALUES (?, ?, ?)').run(label, scope.categoryId, at).lastInsertRowid,
+      db
+        .prepare('INSERT INTO count_sessions (scope, category_id, started_at, as_of_movement_id) VALUES (?, ?, ?, ?)')
+        .run(label, scope.categoryId, at, lastMovementId(db)).lastInsertRowid,
     );
     const insert = db.prepare('INSERT INTO count_lines (session_id, item_id, expected) VALUES (?, ?, ?)');
     for (const it of items) insert.run(id, it.id, it.qty);
@@ -43,12 +49,14 @@ export function getCountSession(db: DatabaseSync, id: number): CountSessionView 
   if (!s) return null;
   const lines = db
     .prepare(
-      `SELECT l.id AS lineId, i.id AS itemId, i.sku, i.name, u.name AS unit, l.expected, l.actual, l.variance, i.qty AS currentQty
-       FROM count_lines l JOIN items i ON i.id = l.item_id JOIN units u ON u.id = i.unit_id
+      `SELECT l.id AS lineId, i.id AS itemId, i.sku, i.name, u.name AS unit, l.expected, l.actual, l.variance, i.qty AS currentQty,
+         EXISTS (SELECT 1 FROM movements m WHERE m.item_id = i.id AND m.id > s.as_of_movement_id) AS moved
+       FROM count_lines l JOIN count_sessions s ON s.id = l.session_id
+         JOIN items i ON i.id = l.item_id JOIN units u ON u.id = i.unit_id
        WHERE l.session_id = ? ORDER BY i.sku`,
     )
-    .all(id) as CountLineView[];
-  return { ...s, lines: lines.map((l) => ({ ...l })) };
+    .all(id) as (Omit<CountLineView, 'moved'> & { moved: number })[];
+  return { ...s, lines: lines.map((l) => ({ ...l, moved: l.moved === 1 })) };
 }
 
 export function listCountSessions(db: DatabaseSync): CountSessionSummary[] {
@@ -94,12 +102,13 @@ export function saveCountActuals(db: DatabaseSync, sessionId: number, entries: {
 export function refreshExpected(db: DatabaseSync, sessionId: number): number {
   return tx(db, () => {
     openSession(db, sessionId);
-    const stale = getCountSession(db, sessionId)!.lines.filter((l) => Math.abs(l.currentQty - l.expected) > 1e-9);
-    for (const l of stale) {
+    const lines = getCountSession(db, sessionId)!.lines;
+    for (const l of lines) {
       const variance = l.actual === null ? null : round(l.actual - l.currentQty, 3);
       db.prepare('UPDATE count_lines SET expected = ?, variance = ? WHERE id = ?').run(l.currentQty, variance, l.lineId);
     }
-    return stale.length;
+    db.prepare('UPDATE count_sessions SET as_of_movement_id = ? WHERE id = ?').run(lastMovementId(db), sessionId);
+    return lines.filter((l) => l.moved).length;
   });
 }
 
@@ -108,7 +117,8 @@ export function postCountSession(db: DatabaseSync, sessionId: number, actor: Act
     openSession(db, sessionId);
     const counted = getCountSession(db, sessionId)!.lines.filter((l) => l.actual !== null);
     if (counted.length === 0) throw new InventoryError('Enter at least one actual count before posting.');
-    const stale = counted.filter((l) => Math.abs(l.currentQty - l.expected) > 1e-9);
+    // Compare movement ids, not quantities: stock that moved and came back is still a changed shelf.
+    const stale = counted.filter((l) => l.moved);
     if (stale.length) {
       throw new InventoryError(
         `Stock moved since this count started for: ${stale.map((l) => l.sku).join(', ')}. Click "Refresh expected", re-check those items, then post.`,

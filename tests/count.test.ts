@@ -82,6 +82,31 @@ describe('count sessions', () => {
     expect(postCountSession(f.db, id, 'admin')).toEqual({ adjustments: 1 });
     expect(qtyOf(f.db, f.item)).toBe(14);
   });
+  it('refuses to post when stock moved and came back to the same qty', () => {
+    const f = stocked();
+    const id = startCountSession(f.db, { categoryId: f.cat });
+    postReceipt(f.db, { supplierId: f.supplier, refNo: 'R2', lines: [{ itemId: f.item, qty: 5, unitCost: 50 }] }, 'admin');
+    saveCountActuals(f.db, id, [{ lineId: lineFor(f, id, f.item).lineId, actual: 25 }]);
+    postRelease(f.db, { counterparty: 'Walk-in', refNo: 'D', lines: [{ itemId: f.item, qty: 5 }] }, 'encoder');
+    expect(qtyOf(f.db, f.item)).toBe(20);
+    expect(lineFor(f, id, f.item).moved).toBe(true);
+    expect(lineFor(f, id, f.item2).moved).toBe(false);
+    expect(() => postCountSession(f.db, id, 'admin')).toThrow(/Stock moved since this count started for: T-001/);
+    expect(adjustCount(f)).toEqual({ n: 0 });
+    refreshExpected(f.db, id);
+    expect(lineFor(f, id, f.item).moved).toBe(false);
+    saveCountActuals(f.db, id, [{ lineId: lineFor(f, id, f.item).lineId, actual: 20 }]);
+    expect(postCountSession(f.db, id, 'admin')).toEqual({ adjustments: 0 });
+    expect(qtyOf(f.db, f.item)).toBe(20);
+  });
+  it('posts a count adjustment for an item deactivated mid-count', () => {
+    const f = stocked();
+    const id = startCountSession(f.db, { categoryId: f.cat });
+    saveCountActuals(f.db, id, [{ lineId: lineFor(f, id, f.item).lineId, actual: 18 }]);
+    f.db.prepare('UPDATE items SET active = 0 WHERE id = ?').run(f.item);
+    expect(postCountSession(f.db, id, 'admin')).toEqual({ adjustments: 1 });
+    expect(qtyOf(f.db, f.item)).toBe(18);
+  });
   it('lists sessions newest first with progress counts', () => {
     const f = stocked();
     const a = startCountSession(f.db, { categoryId: f.cat }, '2026-10-01T00:00:00.000Z');

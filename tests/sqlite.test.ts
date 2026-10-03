@@ -1,5 +1,9 @@
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { DatabaseSync } from 'node:sqlite';
 import { describe, expect, it } from 'vitest';
-import { tx } from '@/lib/sqlite';
+import { openDb, tx } from '@/lib/sqlite';
 import { type Fixture, makeDb, qtyOf } from './helpers';
 
 function addMovement(db: Fixture['db'], itemId: number) {
@@ -30,6 +34,20 @@ describe('schema', () => {
     expect(() =>
       db.prepare('INSERT INTO items (sku, name, category_id, unit_id) VALUES (?, ?, ?, ?)').run('t-001', 'Dup', cat, unit),
     ).toThrow();
+  });
+});
+
+describe('migrate', () => {
+  it('adds count_sessions.as_of_movement_id to a database created before it existed', () => {
+    const file = path.join(os.tmpdir(), `inv-migrate-${process.pid}-${Date.now()}.db`);
+    const old = new DatabaseSync(file);
+    old.exec('CREATE TABLE count_sessions (id INTEGER PRIMARY KEY, scope TEXT NOT NULL, category_id INTEGER, started_at TEXT NOT NULL, posted_at TEXT)');
+    old.close();
+    const db = openDb(file);
+    const cols = (db.prepare('PRAGMA table_info(count_sessions)').all() as { name: string }[]).map((c) => c.name);
+    db.close();
+    fs.rmSync(file, { force: true });
+    expect(cols).toContain('as_of_movement_id');
   });
 });
 

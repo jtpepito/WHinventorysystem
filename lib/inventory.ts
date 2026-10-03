@@ -41,12 +41,12 @@ export function weightedAverage(oldQty: number, oldAvg: number, rcvQty: number, 
 
 type ItemRow = { id: number; sku: string; name: string; qty: number; avg_cost: number; active: number; unit: string };
 
-function loadItem(db: DatabaseSync, itemId: number, label: string): ItemRow {
+function loadItem(db: DatabaseSync, itemId: number, label: string, allowInactive = false): ItemRow {
   const row = db
     .prepare('SELECT i.id, i.sku, i.name, i.qty, i.avg_cost, i.active, u.name AS unit FROM items i JOIN units u ON u.id = i.unit_id WHERE i.id = ?')
     .get(itemId) as ItemRow | undefined;
   if (!row) throw new InventoryError(`${label}: item not found.`);
-  if (!row.active) throw new InventoryError(`${label}: ${row.sku} ${row.name} is inactive.`);
+  if (!row.active && !allowInactive) throw new InventoryError(`${label}: ${row.sku} ${row.name} is inactive.`);
   return row;
 }
 
@@ -139,7 +139,8 @@ export function postAdjustment(
   const delta = round(input.qtyDelta, 3);
   if (!Number.isFinite(delta) || delta === 0) throw new InventoryError('Adjustment must change the quantity.');
   return tx(db, () => {
-    const item = loadItem(db, input.itemId, 'Adjustment');
+    // Inactive items can still hold stock, so a count may correct them.
+    const item = loadItem(db, input.itemId, 'Adjustment', true);
     if (item.qty + delta < -1e-9) {
       throw new InventoryError(`Adjustment would take ${item.sku} below zero (on hand ${formatQty(item.qty)}).`);
     }

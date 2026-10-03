@@ -46,7 +46,8 @@ CREATE TABLE IF NOT EXISTS count_sessions (
   scope TEXT NOT NULL,
   category_id INTEGER REFERENCES categories(id) ON DELETE SET NULL,
   started_at TEXT NOT NULL,
-  posted_at TEXT
+  posted_at TEXT,
+  as_of_movement_id INTEGER NOT NULL DEFAULT 0
 );
 CREATE TABLE IF NOT EXISTS count_lines (
   id INTEGER PRIMARY KEY,

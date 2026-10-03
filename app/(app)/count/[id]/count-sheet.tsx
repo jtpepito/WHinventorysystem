@@ -33,7 +33,7 @@ export function CountSheet({ sessionId, lines }: { sessionId: number; lines: Cou
               const raw = actuals[l.lineId] ?? '';
               const a = raw.trim() === '' ? null : parseNumberInput(raw);
               const variance = a === null ? null : round(a - l.expected, 3);
-              const moved = Math.abs(l.currentQty - l.expected) > 1e-9;
+              const moved = l.moved;
               return (
                 <TableRow key={l.lineId} className={cn(moved && 'bg-amber-50')}>
                   <TableCell className="font-mono text-xs">{l.sku}</TableCell>
