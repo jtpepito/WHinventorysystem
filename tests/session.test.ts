@@ -33,6 +33,15 @@ describe('canAccess', () => {
       expect(canAccess('encoder', p)).toBe(false);
     }
   });
+  it('gives encoders sales, customers and purchases but no finance', () => {
+    for (const p of ['/sales', '/sales/new', '/sales/12', '/sales/12/print', '/customers', '/customers/new', '/customers/3', '/customers/3/edit', '/purchases', '/purchases/4']) {
+      expect(canAccess('encoder', p)).toBe(true);
+    }
+    for (const p of ['/expenses', '/expenses/new', '/finance', '/finance/journal', '/finance/periods', '/reports', '/reports/csv/income-statement', '/settings', '/sales/12/void']) {
+      expect(canAccess('encoder', p)).toBe(false);
+    }
+    for (const p of ['/sales/new', '/expenses/new', '/finance/ledger/1010', '/customers/3/edit']) expect(canAccess('admin', p)).toBe(true);
+  });
   it('sends each role home', () => {
     expect(homeFor('admin')).toBe('/dashboard');
     expect(homeFor('encoder')).toBe('/receive');

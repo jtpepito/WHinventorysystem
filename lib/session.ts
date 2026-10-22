@@ -39,12 +39,14 @@ export async function verifySession(token: string, secret: string, nowMs: number
   return role;
 }
 
-const ENCODER_PREFIXES = ['/receive', '/release', '/count', '/items', '/movements'];
+// Encoders record sales, collections, deliveries and counts; everything that reads or changes the books is admin-only.
+const ENCODER_PREFIXES = ['/receive', '/release', '/count', '/items', '/movements', '/sales', '/customers', '/purchases'];
 
 export function canAccess(role: Role, pathname: string): boolean {
   if (role === 'admin') return true;
   if (pathname === '/items/new' || /^\/items\/[^/]+\/edit\/?$/.test(pathname)) return false;
   if (pathname === '/items/import' || pathname.startsWith('/items/import/')) return false;
+  if (/^\/sales\/[^/]+\/void\/?$/.test(pathname)) return false;
   return ENCODER_PREFIXES.some((p) => pathname === p || pathname.startsWith(`${p}/`));
 }
 

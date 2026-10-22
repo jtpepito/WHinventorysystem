@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { parseCountEntries, parseReceiptLines, parseReleaseLines, parseReorderUpdates, readItemForm } from '@/lib/forms';
+import { parseCountEntries, parseReceiptLines, parseReleaseLines, parseReorderUpdates, parseSellPriceUpdates, readItemForm } from '@/lib/forms';
 import { postReceipt, postRelease } from '@/lib/inventory';
 import { makeDb } from './helpers';
 
@@ -51,6 +51,14 @@ describe('parseReorderUpdates', () => {
   it('parses and names bad rows by SKU', () => {
     expect(parseReorderUpdates(j([{ itemId: 1, sku: 'A', reorderPoint: '5' }]))).toEqual([{ itemId: 1, reorderPoint: 5 }]);
     expect(() => parseReorderUpdates(j([{ itemId: 1, sku: 'A', reorderPoint: '' }]))).toThrow('A: enter a reorder point.');
+  });
+});
+
+describe('parseSellPriceUpdates', () => {
+  it('parses prices and names bad rows by SKU', () => {
+    expect(parseSellPriceUpdates(j([{ itemId: 1, sku: 'A', sellPrice: '2,999.50' }]))).toEqual([{ itemId: 1, sellPrice: 2999.5 }]);
+    expect(() => parseSellPriceUpdates(j([{ itemId: 1, sku: 'A', sellPrice: '' }]))).toThrow('A: enter a sell price.');
+    expect(() => parseSellPriceUpdates(j([{ itemId: 1, sku: 'A', sellPrice: 'x' }]))).toThrow('A: enter a valid sell price.');
   });
 });
 

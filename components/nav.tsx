@@ -9,11 +9,16 @@ import { cn } from '@/lib/utils';
 
 const LINKS = [
   { href: '/dashboard', label: 'Dashboard' },
+  { href: '/sales', label: 'Sales' },
+  { href: '/customers', label: 'Customers' },
   { href: '/items', label: 'Items' },
   { href: '/receive', label: 'Receive' },
+  { href: '/purchases', label: 'Purchases' },
   { href: '/release', label: 'Release' },
   { href: '/count', label: 'Count' },
   { href: '/movements', label: 'Movements' },
+  { href: '/expenses', label: 'Expenses' },
+  { href: '/finance', label: 'Finance' },
   { href: '/reports', label: 'Reports' },
   { href: '/settings', label: 'Settings' },
   { href: '/debug', label: 'Ledger check' },
@@ -34,6 +39,7 @@ export function Nav({ role }: { role: Role }) {
             <Link
               key={l.href}
               href={l.href}
+              prefetch={false} // every nav link is a dynamic page; prefetching all 14 on each render is a server render storm
               aria-current={active ? 'page' : undefined}
               className={cn('whitespace-nowrap rounded-md px-3 py-2 text-sm hover:bg-accent', active && 'bg-accent font-medium')}
             >

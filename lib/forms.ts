@@ -66,6 +66,14 @@ export function parseReorderUpdates(raw: string): { itemId: number; reorderPoint
   });
 }
 
+export function parseSellPriceUpdates(raw: string): { itemId: number; sellPrice: number }[] {
+  return readArray(raw).map((row) => {
+    const label = String(row.sku ?? 'Item');
+    if (isBlank(row.sellPrice)) throw new InventoryError(`${label}: enter a sell price.`);
+    return { itemId: Number(row.itemId), sellPrice: num(row.sellPrice, `${label}: enter a valid sell price.`) };
+  });
+}
+
 export function readItemForm(fd: FormData): ItemInput {
   const rp = String(fd.get('reorderPoint') ?? '');
   const sp = String(fd.get('sellPrice') ?? '');
