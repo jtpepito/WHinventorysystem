@@ -37,6 +37,37 @@ describe('schema', () => {
   });
 });
 
+describe('accounting schema', () => {
+  function withSale(db: Fixture['db']) {
+    db.prepare("INSERT INTO sales (number, date, customer_name, payment_method, subtotal, vat, total, cogs, actor, created_at) VALUES ('SI-000001', '2026-10-01', 'Walk-in', 'cash', 100, 12, 112, 50, 'admin', 'x')").run();
+    return (db.prepare('SELECT id FROM sales').get() as { id: number }).id;
+  }
+  it('lets a sale go posted → void once, then freezes it', () => {
+    const { db } = makeDb();
+    const id = withSale(db);
+    db.prepare("UPDATE sales SET status = 'void', void_reason = 'typo', voided_at = 'y' WHERE id = ?").run(id);
+    expect(() => db.prepare("UPDATE sales SET status = 'posted' WHERE id = ?").run(id)).toThrow(/immutable/);
+    expect(() => db.prepare('UPDATE sales SET total = 1 WHERE id = ?').run(id)).toThrow(/immutable/);
+    expect(() => db.prepare('DELETE FROM sales WHERE id = ?').run(id)).toThrow(/immutable/);
+  });
+  it('refuses a void that also changes the amount', () => {
+    const { db } = makeDb();
+    const id = withSale(db);
+    expect(() => db.prepare("UPDATE sales SET status = 'void', total = 1 WHERE id = ?").run(id)).toThrow(/immutable/);
+  });
+  it('journal lines carry a debit or a credit, never both or neither', () => {
+    const { db } = makeDb();
+    db.prepare("INSERT INTO accounts (code, name, type) VALUES ('1010', 'Cash', 'asset')").run();
+    db.prepare("INSERT INTO journal_entries (entry_no, date, source_type, memo, actor, created_at) VALUES ('JE-000001', '2026-10-01', 'manual', 'm', 'admin', 'x')").run();
+    const ok = db.prepare('INSERT INTO journal_lines (entry_id, account_id, debit, credit) VALUES (1, 1, ?, ?)');
+    ok.run(5, 0);
+    expect(() => ok.run(5, 5)).toThrow();
+    expect(() => ok.run(0, 0)).toThrow();
+    expect(() => db.prepare('UPDATE journal_lines SET debit = 9').run()).toThrow(/immutable/);
+    expect(() => db.prepare('DELETE FROM journal_entries').run()).toThrow(/immutable/);
+  });
+});
+
 describe('migrate', () => {
   it('adds count_sessions.as_of_movement_id to a database created before it existed', () => {
     const file = path.join(os.tmpdir(), `inv-migrate-${process.pid}-${Date.now()}.db`);
@@ -44,10 +75,15 @@ describe('migrate', () => {
     old.exec('CREATE TABLE count_sessions (id INTEGER PRIMARY KEY, scope TEXT NOT NULL, category_id INTEGER, started_at TEXT NOT NULL, posted_at TEXT)');
     old.close();
     const db = openDb(file);
-    const cols = (db.prepare('PRAGMA table_info(count_sessions)').all() as { name: string }[]).map((c) => c.name);
+    const colsOf = (t: string) => (db.prepare(`PRAGMA table_info(${t})`).all() as { name: string }[]).map((c) => c.name);
+    const cols = colsOf('count_sessions');
+    const itemCols = colsOf('items');
+    const moveCols = colsOf('movements');
     db.close();
     fs.rmSync(file, { force: true });
     expect(cols).toContain('as_of_movement_id');
+    expect(itemCols).toContain('sell_price');
+    expect(moveCols).toEqual(expect.arrayContaining(['purchase_id', 'sale_id']));
   });
 });
 

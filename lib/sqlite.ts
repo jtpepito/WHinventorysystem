@@ -1,22 +1,27 @@
 import { DatabaseSync } from 'node:sqlite';
-import { SCHEMA } from './schema';
+import { DOCUMENT_TRIGGERS, SCHEMA } from './schema';
 
 export function openDb(file: string): DatabaseSync {
   const db = new DatabaseSync(file);
   db.exec('PRAGMA foreign_keys = ON; PRAGMA busy_timeout = 5000;');
   if (file !== ':memory:') db.exec('PRAGMA journal_mode = WAL;');
   db.exec(SCHEMA);
+  db.exec(DOCUMENT_TRIGGERS);
   migrate(db);
   return db;
 }
 
 // Columns added after a database may already exist (CREATE TABLE IF NOT EXISTS won't add them).
 function migrate(db: DatabaseSync): void {
-  const cols = (db.prepare('PRAGMA table_info(count_sessions)').all() as { name: string }[]).map((c) => c.name);
-  if (!cols.includes('as_of_movement_id')) {
-    // 0 marks every line of an existing open count as moved, so it must be refreshed before posting.
-    db.exec('ALTER TABLE count_sessions ADD COLUMN as_of_movement_id INTEGER NOT NULL DEFAULT 0');
-  }
+  const addColumn = (table: string, column: string, ddl: string) => {
+    const cols = (db.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[]).map((c) => c.name);
+    if (!cols.includes(column)) db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${ddl}`);
+  };
+  // 0 marks every line of an existing open count as moved, so it must be refreshed before posting.
+  addColumn('count_sessions', 'as_of_movement_id', 'INTEGER NOT NULL DEFAULT 0');
+  addColumn('items', 'sell_price', 'REAL NOT NULL DEFAULT 0 CHECK (sell_price >= 0)');
+  addColumn('movements', 'purchase_id', 'INTEGER');
+  addColumn('movements', 'sale_id', 'INTEGER');
 }
 
 // BEGIN IMMEDIATE takes the write lock up front, so a stock check and its update
