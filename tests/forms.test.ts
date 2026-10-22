@@ -58,8 +58,12 @@ describe('readItemForm', () => {
   it('reads fields, defaults a blank reorder point to 0, and reads the checkbox', () => {
     const fd = new FormData();
     fd.set('sku', 'X-1'); fd.set('name', 'Thing'); fd.set('categoryId', '2'); fd.set('unitId', '3'); fd.set('reorderPoint', '');
-    expect(readItemForm(fd)).toEqual({ sku: 'X-1', name: 'Thing', categoryId: 2, unitId: 3, reorderPoint: 0, active: false });
-    fd.set('active', 'on'); fd.set('reorderPoint', 'ten');
+    expect(readItemForm(fd)).toEqual({ sku: 'X-1', name: 'Thing', categoryId: 2, unitId: 3, reorderPoint: 0, active: false, sellPrice: 0 });
+    fd.set('sellPrice', '1,250.50');
+    expect(readItemForm(fd).sellPrice).toBe(1250.5);
+    fd.set('sellPrice', 'abc');
+    expect(() => readItemForm(fd)).toThrow('Sell price must be a number.');
+    fd.set('sellPrice', ''); fd.set('active', 'on'); fd.set('reorderPoint', 'ten');
     expect(() => readItemForm(fd)).toThrow('Reorder point must be a number.');
   });
 });

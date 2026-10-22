@@ -4,7 +4,7 @@ import { addDays, isDay, manilaDayStartUtc } from './time';
 
 export type ItemListRow = {
   id: number; sku: string; name: string; categoryId: number; category: string; unitId: number; unit: string;
-  qty: number; avgCost: number; reorderPoint: number; active: boolean; low: boolean;
+  qty: number; avgCost: number; reorderPoint: number; sellPrice: number; active: boolean; low: boolean;
 };
 export type ItemStatus = 'all' | 'low' | 'active' | 'inactive';
 export type ItemFilter = { q?: string; categoryId?: number; status?: ItemStatus };
@@ -14,7 +14,7 @@ export function isItemStatus(s: unknown): s is ItemStatus {
 }
 
 const ITEM_SELECT = `SELECT i.id, i.sku, i.name, i.category_id AS categoryId, c.name AS category, i.unit_id AS unitId, u.name AS unit,
-  i.qty, i.avg_cost AS avgCost, i.reorder_point AS reorderPoint, i.active, (i.active = 1 AND i.qty <= i.reorder_point) AS low
+  i.qty, i.avg_cost AS avgCost, i.reorder_point AS reorderPoint, i.sell_price AS sellPrice, i.active, (i.active = 1 AND i.qty <= i.reorder_point) AS low
   FROM items i JOIN categories c ON c.id = i.category_id JOIN units u ON u.id = i.unit_id`;
 
 type RawItem = Omit<ItemListRow, 'active' | 'low'> & { active: number; low: number };

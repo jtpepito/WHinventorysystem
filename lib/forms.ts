@@ -68,6 +68,7 @@ export function parseReorderUpdates(raw: string): { itemId: number; reorderPoint
 
 export function readItemForm(fd: FormData): ItemInput {
   const rp = String(fd.get('reorderPoint') ?? '');
+  const sp = String(fd.get('sellPrice') ?? '');
   return {
     sku: String(fd.get('sku') ?? ''),
     name: String(fd.get('name') ?? ''),
@@ -75,5 +76,6 @@ export function readItemForm(fd: FormData): ItemInput {
     unitId: Number(fd.get('unitId')),
     reorderPoint: isBlank(rp) ? 0 : num(rp, 'Reorder point must be a number.'),
     active: fd.get('active') === 'on',
+    sellPrice: isBlank(sp) ? 0 : num(sp, 'Sell price must be a number.'),
   };
 }

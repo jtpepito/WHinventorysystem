@@ -9,7 +9,7 @@ import { manilaDay, nowIso } from './time';
 export const MAX_IMPORT_ROWS = 2000;
 const OPENING_SUPPLIER = 'Opening balance';
 
-type Field = 'sku' | 'name' | 'category' | 'unit' | 'reorderPoint' | 'qty' | 'unitCost';
+type Field = 'sku' | 'name' | 'category' | 'unit' | 'reorderPoint' | 'qty' | 'unitCost' | 'sellPrice';
 
 // Heading spellings people use in their own sheets, compared lower-case with spaces collapsed.
 const HEADINGS: Record<Field, string[]> = {
@@ -20,6 +20,7 @@ const HEADINGS: Record<Field, string[]> = {
   reorderPoint: ['reorder point', 'reorder', 'reorder level', 'min', 'minimum'],
   qty: ['qty on hand', 'qty', 'quantity', 'on hand', 'stock', 'opening qty', 'opening stock'],
   unitCost: ['unit cost', 'cost', 'avg cost', 'average cost'],
+  sellPrice: ['sell price', 'selling price', 'price', 'srp', 'retail price'],
 };
 const REQUIRED: { field: Field; label: string }[] = [
   { field: 'sku', label: 'SKU' }, { field: 'name', label: 'Name' }, { field: 'category', label: 'Category' }, { field: 'unit', label: 'Unit' },
@@ -28,7 +29,7 @@ const REQUIRED: { field: Field; label: string }[] = [
 export type ImportRow = {
   row: number; // spreadsheet row: the heading row is 1
   sku: string; name: string; category: string; unit: string;
-  reorderPoint: number; qty: number; unitCost: number | null;
+  reorderPoint: number; qty: number; unitCost: number | null; sellPrice: number;
   errors: string[];
 };
 export type ImportPlan = {
@@ -126,6 +127,7 @@ export function planImport(db: DatabaseSync, text: string): ImportPlan {
     const qty = numberCell(cell(r, 'qty'), 'Qty on hand', errors, { dp: 3 }) ?? 0;
     const unitCost = numberCell(cell(r, 'unitCost'), 'Unit cost', errors, { dp: 4 });
     const reorderPoint = numberCell(cell(r, 'reorderPoint'), 'Reorder point', errors, { dp: 3 }) ?? 0;
+    const sellPrice = numberCell(cell(r, 'sellPrice'), 'Sell price', errors, { dp: 2 }) ?? 0;
     const costMissing = cell(r, 'unitCost').trim() === '';
     if (qty > 0 && costMissing) errors.push('Unit cost is required when there is stock.');
 
@@ -133,7 +135,7 @@ export function planImport(db: DatabaseSync, text: string): ImportPlan {
       row, sku, name,
       category: norm(rawCategory) ? categories.resolve(rawCategory) : '',
       unit: norm(rawUnit) ? units.resolve(rawUnit) : '',
-      reorderPoint, qty, unitCost, errors,
+      reorderPoint, qty, unitCost, sellPrice, errors,
     };
   });
 
@@ -167,7 +169,7 @@ export function commitImport(db: DatabaseSync, text: string, actor: Actor, at = 
 
     const created = plan.rows.map((r) => ({
       r,
-      id: createItem(db, { sku: r.sku, name: r.name, categoryId: idOf('categories', r.category), unitId: idOf('units', r.unit), reorderPoint: r.reorderPoint, active: true }),
+      id: createItem(db, { sku: r.sku, name: r.name, categoryId: idOf('categories', r.category), unitId: idOf('units', r.unit), reorderPoint: r.reorderPoint, active: true, sellPrice: r.sellPrice }),
     }));
 
     const lines = created.filter(({ r }) => r.qty > 0).map(({ r, id }) => ({ itemId: id, qty: r.qty, unitCost: r.unitCost ?? 0, label: `Row ${r.row}` }));

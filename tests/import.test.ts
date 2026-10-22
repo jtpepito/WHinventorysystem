@@ -12,7 +12,7 @@ describe('planImport', () => {
     const plan = planImport(f.db, csv(' item code ,UOM,Description,CATEGORY,Qty,Cost,Reorder level', ' n-1 , pc , Nail 2in ,Tools," 1,000 ",85,5')); // Excel quotes a cell that contains a comma
     expect(plan.fileErrors).toEqual([]);
     expect(plan.rows).toEqual([
-      { row: 2, sku: 'N-1', name: 'Nail 2in', category: 'Tools', unit: 'pc', reorderPoint: 5, qty: 1000, unitCost: 85, errors: [] },
+      { row: 2, sku: 'N-1', name: 'Nail 2in', category: 'Tools', unit: 'pc', reorderPoint: 5, qty: 1000, unitCost: 85, sellPrice: 0, errors: [] },
     ]);
     expect(plan).toMatchObject({ okCount: 1, errorCount: 0, stockedCount: 1, stockValue: 85000, newCategories: [], newUnits: [] });
   });
@@ -61,6 +61,13 @@ describe('planImport', () => {
     expect(plan.newCategories).toEqual(['Electrical']);
     expect(plan.newUnits).toEqual(['roll']);
     expect(plan.rows.map((r) => [r.category, r.unit])).toEqual([['Tools', 'pc'], ['Electrical', 'roll'], ['Electrical', 'roll']]);
+  });
+  it('reads an optional selling price column', () => {
+    const f = makeDb();
+    const plan = planImport(f.db, csv('SKU,Name,Category,Unit,Price', 'A-1,A,Tools,pc,150', 'A-2,B,Tools,pc,', 'A-3,C,Tools,pc,abc'));
+    expect(plan.rows.map((r) => [r.sellPrice, r.errors])).toEqual([[150, []], [0, []], [0, ['Sell price must be a number.']]]);
+    commitImport(f.db, csv('SKU,Name,Category,Unit,SRP', 'A-9,Z,Tools,pc,99.5'), 'admin', AT);
+    expect(f.db.prepare("SELECT sell_price FROM items WHERE sku = 'A-9'").get()).toMatchObject({ sell_price: 99.5 });
   });
   it('caps the number of rows', () => {
     const f = makeDb();

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  addNamed, addSupplier, createItem, deleteNamed, deleteSupplier, itemHasHistory, listNamed, listSuppliers, renameNamed, setReorderPoints, updateItem,
+  addNamed, addSupplier, createItem, deleteNamed, deleteSupplier, itemHasHistory, listNamed, listSuppliers, renameNamed, setReorderPoints, setSellPrices, updateItem,
 } from '@/lib/catalog';
 import { startCountSession } from '@/lib/count';
 import { postReceipt } from '@/lib/inventory';
@@ -86,6 +86,15 @@ describe('items', () => {
     expect(itemHasHistory(db, item)).toBe(false);
     updateItem(db, item, { sku: 'T-001', name: 'Hammer', categoryId: cat, unitId: box, reorderPoint: 0, active: true });
     expect(get(db, 'SELECT unit_id FROM items WHERE id = ?', item)).toEqual({ unit_id: box });
+  });
+  it('stores a selling price and bulk-sets prices atomically', () => {
+    const { db, cat, unit, item, item2 } = makeDb();
+    const id = createItem(db, { sku: 'P-9', name: 'Priced', categoryId: cat, unitId: unit, reorderPoint: 0, active: true, sellPrice: 120.5 });
+    expect(get(db, 'SELECT sell_price FROM items WHERE id = ?', id)).toEqual({ sell_price: 120.5 });
+    expect(() => createItem(db, { sku: 'P-10', name: 'X', categoryId: cat, unitId: unit, reorderPoint: 0, active: true, sellPrice: -1 })).toThrow(/Sell price/);
+    expect(setSellPrices(db, [{ itemId: item, sellPrice: 99 }, { itemId: item2, sellPrice: 10.25 }])).toBe(2);
+    expect(() => setSellPrices(db, [{ itemId: item, sellPrice: 1 }, { itemId: item2, sellPrice: 1.005 }])).toThrow(/T-002/);
+    expect(get(db, 'SELECT sell_price FROM items WHERE id = ?', item)).toEqual({ sell_price: 99 });
   });
   it('bulk-sets reorder points atomically', () => {
     const { db, item, item2 } = makeDb();

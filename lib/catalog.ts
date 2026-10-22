@@ -6,7 +6,8 @@ import { tx } from './sqlite';
 export type NamedTable = 'categories' | 'units';
 export type Named = { id: number; name: string; inUse: number };
 export type Supplier = { id: number; name: string; contact: string };
-export type ItemInput = { sku: string; name: string; categoryId: number; unitId: number; reorderPoint: number; active: boolean };
+// sellPrice is VAT-inclusive; optional so callers that don't sell (tests, legacy forms) default to 0.
+export type ItemInput = { sku: string; name: string; categoryId: number; unitId: number; reorderPoint: number; active: boolean; sellPrice?: number };
 
 // SKUs are stored upper-case; shared with the CSV import so both check the same way.
 export const SKU_PATTERN = /^[A-Z0-9][A-Z0-9._-]{0,31}$/;
@@ -89,7 +90,13 @@ function checkReorderPoint(n: number, label: string): number {
   return round(n, 3);
 }
 
-function cleanItem(db: DatabaseSync, input: ItemInput, exceptId = 0): ItemInput {
+function checkSellPrice(n: number, label: string): number {
+  if (!Number.isFinite(n) || n < 0 || n > 1_000_000_000) throw new InventoryError(`${label}: sell price must be 0 or more.`);
+  if (Math.abs(round(n, 2) - n) > 1e-9) throw new InventoryError(`${label}: sell price can have at most 2 decimal places.`);
+  return round(n, 2);
+}
+
+function cleanItem(db: DatabaseSync, input: ItemInput, exceptId = 0): Required<ItemInput> {
   const sku = (input.sku ?? '').trim().toUpperCase();
   if (!SKU_PATTERN.test(sku)) throw new InventoryError(SKU_MESSAGE);
   const name = cleanName(input.name, 'Item', 120);
@@ -97,14 +104,19 @@ function cleanItem(db: DatabaseSync, input: ItemInput, exceptId = 0): ItemInput 
   if (!db.prepare('SELECT 1 FROM units WHERE id = ?').get(input.unitId)) throw new InventoryError('Pick a unit.');
   const dup = db.prepare('SELECT name FROM items WHERE sku = ? AND id <> ?').get(sku, exceptId) as { name: string } | undefined;
   if (dup) throw new InventoryError(`SKU ${sku} is already used by ${dup.name}.`);
-  return { sku, name, categoryId: input.categoryId, unitId: input.unitId, reorderPoint: checkReorderPoint(input.reorderPoint, 'Reorder point'), active: !!input.active };
+  return {
+    sku, name, categoryId: input.categoryId, unitId: input.unitId,
+    reorderPoint: checkReorderPoint(input.reorderPoint, 'Reorder point'),
+    active: !!input.active,
+    sellPrice: checkSellPrice(input.sellPrice ?? 0, 'Sell price'),
+  };
 }
 
 export function createItem(db: DatabaseSync, input: ItemInput): number {
   const i = cleanItem(db, input);
   return Number(
-    db.prepare('INSERT INTO items (sku, name, category_id, unit_id, reorder_point, active) VALUES (?, ?, ?, ?, ?, ?)')
-      .run(i.sku, i.name, i.categoryId, i.unitId, i.reorderPoint, i.active ? 1 : 0).lastInsertRowid,
+    db.prepare('INSERT INTO items (sku, name, category_id, unit_id, reorder_point, active, sell_price) VALUES (?, ?, ?, ?, ?, ?, ?)')
+      .run(i.sku, i.name, i.categoryId, i.unitId, i.reorderPoint, i.active ? 1 : 0, i.sellPrice).lastInsertRowid,
   );
 }
 
@@ -126,8 +138,19 @@ export function updateItem(db: DatabaseSync, id: number, input: ItemInput): void
       `Can't change the unit of ${current.sku} ${current.name} from ${current.unit}: its stock history is recorded in ${current.unit}. Create a new item for the new unit instead.`,
     );
   }
-  db.prepare('UPDATE items SET sku = ?, name = ?, category_id = ?, unit_id = ?, reorder_point = ?, active = ? WHERE id = ?')
-    .run(i.sku, i.name, i.categoryId, i.unitId, i.reorderPoint, i.active ? 1 : 0, id);
+  db.prepare('UPDATE items SET sku = ?, name = ?, category_id = ?, unit_id = ?, reorder_point = ?, active = ?, sell_price = ? WHERE id = ?')
+    .run(i.sku, i.name, i.categoryId, i.unitId, i.reorderPoint, i.active ? 1 : 0, i.sellPrice, id);
+}
+
+export function setSellPrices(db: DatabaseSync, updates: { itemId: number; sellPrice: number }[]): number {
+  return tx(db, () => {
+    for (const u of updates) {
+      const item = db.prepare('SELECT sku FROM items WHERE id = ?').get(u.itemId) as { sku: string } | undefined;
+      if (!item) throw new InventoryError('Item not found.');
+      db.prepare('UPDATE items SET sell_price = ? WHERE id = ?').run(checkSellPrice(u.sellPrice, item.sku), u.itemId);
+    }
+    return updates.length;
+  });
 }
 
 export function setReorderPoints(db: DatabaseSync, updates: { itemId: number; reorderPoint: number }[]): number {
