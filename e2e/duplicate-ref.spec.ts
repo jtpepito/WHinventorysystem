@@ -15,8 +15,8 @@ async function submitAndWait(page: Page, action: () => Promise<void>, button: st
 test('a repeated receipt reference warns once and can be posted anyway', async ({ page }) => {
   await login(page, 'admin');
   const fill = async (ref: string) => {
-    await page.getByLabel('Supplier').selectOption({ index: 1 });
-    await page.getByLabel('Reference no.').fill(ref);
+    await page.getByLabel('Supplier', { exact: true }).selectOption({ index: 1 });
+    await page.getByLabel('Supplier invoice no.').fill(ref);
     await page.getByLabel('Line 1 item').selectOption({ index: 1 });
     await page.getByLabel('Line 1 qty').fill('1');
     await page.getByLabel('Line 1 unit cost').fill('10');
@@ -30,7 +30,7 @@ test('a repeated receipt reference warns once and can be posted anyway', async (
   await page.goto('/receive');
   await fill(ref);
   await submitAndWait(page, () => postReceipt.click(), 'Post receipt');
-  await expect(message).toHaveText(`Received 1 line(s) under ${ref}.`);
+  await expect(message).toContainText(`Received 1 line(s) under ${ref} (PUR-`);
 
   await fill(ref.toLowerCase());
   await submitAndWait(page, () => postReceipt.click(), 'Post receipt');
@@ -40,16 +40,16 @@ test('a repeated receipt reference warns once and can be posted anyway', async (
 
   // Enter submits with the form's first submit button; that must be the main one, so Enter
   // can't skip the warning. (Checked structurally: a key press 7 ms after a re-render is racy in tests.)
-  const firstSubmit = await page.getByLabel('Reference no.').evaluate((el) => (el as HTMLInputElement).form?.querySelector('[type=submit]')?.textContent?.trim());
+  const firstSubmit = await page.getByLabel('Supplier invoice no.').evaluate((el) => (el as HTMLInputElement).form?.querySelector('[type=submit]')?.textContent?.trim());
   expect(firstSubmit).toBe('Post receipt');
 
   // Editing the reference withdraws the override.
-  await page.getByLabel('Reference no.').fill(`${ref.toLowerCase()}x`);
+  await page.getByLabel('Supplier invoice no.').fill(`${ref.toLowerCase()}x`);
   await expect(postAnyway).toHaveCount(0);
-  await page.getByLabel('Reference no.').fill(ref.toLowerCase());
+  await page.getByLabel('Supplier invoice no.').fill(ref.toLowerCase());
   await expect(postAnyway).toBeVisible();
   await submitAndWait(page, () => postAnyway.click(), 'Post receipt');
-  await expect(message).toHaveText(`Received 1 line(s) under ${ref.toLowerCase()}.`);
+  await expect(message).toContainText(`Received 1 line(s) under ${ref.toLowerCase()} (PUR-`);
 });
 
 test('a repeated release reference warns too', async ({ page }) => {

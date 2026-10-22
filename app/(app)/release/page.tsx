@@ -9,7 +9,7 @@ export default async function ReleasePage() {
   const items = listItems(getDb(), { status: 'active' }).map(({ id, sku, name, unit, qty, avgCost }) => ({ id, sku, name, unit, qty, avgCost }));
   return (
     <>
-      <PageHeader title="Release stock" description="Posting subtracts from on-hand qty. You can't release more than is on hand." />
+      <PageHeader title="Release stock (not a sale)" description="For shop use, samples and write-offs: stock goes out at cost and is booked as shrinkage. Customer sales go through Sales." />
       <ReleaseForm items={items} />
     </>
   );

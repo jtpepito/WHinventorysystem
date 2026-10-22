@@ -11,6 +11,9 @@ import { recordPaymentAction, voidPaymentAction, voidSaleAction } from '../actio
 export function PaymentForm({ saleId, balance, today }: { saleId: number; balance: number; today: string }) {
   const [open, setOpen] = useState(false);
   const [state, action, pending] = useActionState(recordPaymentAction, null);
+  // After a payment settles the balance the page re-renders without a balance; keep the confirmation visible.
+  if (state?.ok) return <FormMessage state={state} />;
+  if (balance <= 0) return null;
   if (!open) return <Button variant="outline" onClick={() => setOpen(true)}>Record payment</Button>;
   return (
     <form action={action} className="grid gap-3 rounded-md border p-4 sm:grid-cols-[8rem_9rem_9rem_1fr_auto] sm:items-end">

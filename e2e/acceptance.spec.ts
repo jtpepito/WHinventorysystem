@@ -17,8 +17,8 @@ test('receive → weighted average, release block, count variance, ledger match'
 
   for (const [ref, cost] of [['E2E-R1', '50'], ['E2E-R2', '100']]) {
     await page.goto('/receive');
-    await page.getByLabel('Supplier').selectOption({ index: 1 });
-    await page.getByLabel('Reference no.').fill(ref);
+    await page.getByLabel('Supplier', { exact: true }).selectOption({ index: 1 });
+    await page.getByLabel('Supplier invoice no.').fill(ref);
     await page.getByLabel('Line 1 item').selectOption({ label: ITEM_LABEL });
     await page.getByLabel('Line 1 qty').fill('10');
     await page.getByLabel('Line 1 unit cost').fill(cost);

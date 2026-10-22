@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { postRelease } from '@/lib/inventory';
+import { duplicateRefWarning, postRelease } from '@/lib/inventory';
 import { accountBalance, seedChart } from '@/lib/ledger';
 import { apAging, getPurchase, listPurchases, postPurchase, postSupplierPayment, purchaseOpenBalance, voidPurchase, voidSupplierPayment } from '@/lib/purchases';
 import { setSetting } from '@/lib/settings';
@@ -68,6 +68,26 @@ describe('postPurchase', () => {
     expect(() => buy(f, { supplierId: 999 })).toThrow(/supplier/);
     expect(f.db.prepare('SELECT COUNT(*) AS n FROM purchases').get()).toMatchObject({ n: 0 });
     expect(f.db.prepare('SELECT COUNT(*) AS n FROM journal_entries').get()).toMatchObject({ n: 0 });
+  });
+});
+
+describe('duplicate invoice check', () => {
+  it('sees supplier invoice numbers on purchases, not just legacy receipts', () => {
+    const f = fixture();
+    const other = Number(f.db.prepare("INSERT INTO suppliers (name) VALUES ('Other Co')").run().lastInsertRowid);
+    buy(f);
+    const warning = duplicateRefWarning(f.db, { type: 'receive', refNo: ' inv-77 ', supplierId: f.supplier });
+    expect(warning).toContain('Reference INV-77 from Acme Supply was already received on');
+    expect(warning).toContain('PUR-000001');
+    expect(warning).toContain("Check this isn't the same delivery entered twice.");
+    expect(duplicateRefWarning(f.db, { type: 'receive', refNo: 'INV-77', supplierId: other })).toBeNull();
+    expect(duplicateRefWarning(f.db, { type: 'receive', refNo: 'INV-78', supplierId: f.supplier })).toBeNull();
+  });
+  it('ignores a voided purchase, so the invoice can be re-entered', () => {
+    const f = fixture();
+    const r = buy(f);
+    voidPurchase(f.db, r.id, 'Wrong quantities', 'admin', '2026-10-03T00:00:00.000Z');
+    expect(duplicateRefWarning(f.db, { type: 'receive', refNo: 'INV-77', supplierId: f.supplier })).toBeNull();
   });
 });
 

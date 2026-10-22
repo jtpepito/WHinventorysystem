@@ -89,7 +89,7 @@ export default async function SalePage({ params, searchParams }: { params: Promi
 
       {sale.status === 'posted' && (
         <div className="flex flex-wrap items-start gap-3">
-          {sale.method === 'credit' && sale.balance > 0 && <PaymentForm saleId={sale.id} balance={sale.balance} today={manilaDay(nowIso())} />}
+          {sale.method === 'credit' && <PaymentForm saleId={sale.id} balance={sale.balance} today={manilaDay(nowIso())} />}
           {role === 'admin' && <VoidSaleForm saleId={sale.id} />}
         </div>
       )}

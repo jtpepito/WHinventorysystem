@@ -162,6 +162,18 @@ export type DuplicateRefQuery = { type: 'receive'; refNo: string; supplierId: nu
 export function duplicateRefWarning(db: DatabaseSync, q: DuplicateRefQuery): string | null {
   const refNo = q.refNo.trim();
   if (!refNo) return null;
+  // Purchases carry the supplier's invoice number; their movements carry the PUR number instead.
+  if (q.type === 'receive') {
+    const p = db
+      .prepare(`SELECT p.number, p.ref_no AS refNo, p.supplier_name AS supplier, p.created_at AS at, COUNT(m.id) AS lines
+        FROM purchases p LEFT JOIN movements m ON m.purchase_id = p.id AND m.type = 'receive'
+        WHERE p.status = 'posted' AND p.supplier_id = ? AND p.ref_no = ? COLLATE NOCASE GROUP BY p.id ORDER BY p.created_at DESC LIMIT 1`)
+      .get(q.supplierId, refNo) as { number: string; refNo: string; supplier: string; at: string; lines: number } | undefined;
+    if (p) {
+      const lines = `${p.lines} line${p.lines === 1 ? '' : 's'}`;
+      return `Reference ${p.refNo} from ${p.supplier} was already received on ${formatManila(p.at)} (${p.number}, ${lines}). Check this isn't the same delivery entered twice.`;
+    }
+  }
   let sql = `SELECT ref_no AS refNo, counterparty, created_at AS at, COUNT(*) AS lines FROM movements
     WHERE type = ? AND ref_no = ? COLLATE NOCASE`;
   const params: (string | number)[] = [q.type, refNo];

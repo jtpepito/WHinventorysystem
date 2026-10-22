@@ -3,6 +3,8 @@ import { requireRole } from '@/lib/auth';
 import { listSuppliers } from '@/lib/catalog';
 import { getDb } from '@/lib/db';
 import { listItems } from '@/lib/queries';
+import { vatRegistered } from '@/lib/settings';
+import { manilaDay, nowIso } from '@/lib/time';
 import { ReceiveForm } from './receive-form';
 
 export default async function ReceivePage({ searchParams }: { searchParams: Promise<{ denied?: string }> }) {
@@ -18,8 +20,13 @@ export default async function ReceivePage({ searchParams }: { searchParams: Prom
           That page is for admins only.
         </p>
       )}
-      <PageHeader title="Receive stock" description="Posting adds to on-hand qty and updates the weighted-average cost." />
-      <ReceiveForm items={items} suppliers={listSuppliers(db).map(({ id, name }) => ({ id, name }))} />
+      <PageHeader title="Purchase / Receive" description="Posting adds the goods to stock at their net cost, books the purchase, and updates the weighted-average cost." />
+      <ReceiveForm
+        items={items}
+        suppliers={listSuppliers(db).map(({ id, name }) => ({ id, name }))}
+        today={manilaDay(nowIso())}
+        vatRegistered={vatRegistered(db)}
+      />
     </>
   );
 }
