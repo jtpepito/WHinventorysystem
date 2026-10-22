@@ -215,7 +215,7 @@ expect(() => checkMoney(1.005, 'Amount')).toThrow('Amount can have at most 2 dec
   - same without VAT invoice → avg cost 112; `Dr 1200 1120 / Cr 1010 1120`.
   - non-VAT setting ignores `vatInvoice:true` (no 1300 line).
   - credit purchase → `Cr 2100`; `purchaseOpenBalance` 1120; payment 1120 bank → balance 0, `Dr 2100 / Cr 1030`; overpay throws `/still owed/`.
-  - `voidPurchase` after releasing 8 of the 10 → throws the readable "only 2 on hand" error; after a fresh purchase with nothing released → qty back, avg cost recomputed by the ledger rebuild? (avg cost stays — document in the test that avg is unchanged and the GL reversal restores 1200 exactly).
+  - `voidPurchase` after releasing 8 of the 10 → throws the readable "only 2 on hand" error; on a fresh purchase with nothing released → qty back to the pre-purchase figure, avg cost unchanged, and the Inventory account (1200) back to its pre-purchase balance exactly.
   - `postCountSession` with variance −3 on an item at avg 50 → a journal `Dr 5200 150 / Cr 1200 150` with `sourceType:'count'`; variance +2 → `Dr 1200 100 / Cr 5200 100`; zero net variance across lines → no entry.
   - `commitImport` with opening stock worth ₱3,180 → `journalForOpening` posted `Dr 1200 3180 / Cr 3100 3180`.
   - `postStockRelease` of 2 @ avg 50 → `Dr 5200 100 / Cr 1200 100`.
@@ -259,7 +259,7 @@ expect(() => checkMoney(1.005, 'Amount')).toThrow('Amount can have at most 2 dec
 - `buildReport` keys added: `'sales-by-day' | 'sales-by-item' | 'sales-by-customer' | 'income-statement' | 'balance-sheet' | 'trial-balance' | 'ar-aging' | 'ap-aging' | 'vat-summary' | 'cash-book' | 'journal'`; `ReportParams = { from?; to?; asOf?; month? }` with defaults (this month / today); `isReportKey` covers them; `REPORT_KEYS` keeps the four stock ones first.
 
 - [ ] **Step 1: Write failing tests** on one scenario fixture (`tests/finance-fixture.ts`: capital 50,000; purchase 10 × 112 VAT cash; cash sale 2 × 168; credit sale 1 × 168 + payment 100; rent 11,200 VAT bank; count −1):
-  - `incomeStatement` for the month: sales 300, cogs 300 (3 × 100), gross 0? — choose prices so the numbers are distinct: sell 168 gross → net 150 each; 3 sold → sales 450, cogs 300, gross profit 150; expenses 10,000; netIncome −9,850.
+  - `incomeStatement` for the month (sell price 168 gross = 150 net; 3 sold): sales 450, cogs 300, gross profit 150; expenses 10,000; netIncome −9,850.
   - `balanceSheet(asOf)`: `balanced === true`; equity includes retained earnings −9,850; assets include Inventory = (10 − 3 − 1) × 100 = 600.
   - `trialBalance` totals equal.
   - `accountLedger('1010')` running balance ends at `accountBalance('1010')`.
