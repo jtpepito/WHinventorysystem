@@ -1,7 +1,8 @@
 import type { DatabaseSync } from 'node:sqlite';
 import { formatQty, round } from './num';
 import { tx } from './sqlite';
-import { formatManila, nowIso } from './time';
+import { assertOpen } from './periods';
+import { formatManila, manilaDay, nowIso } from './time';
 
 export type Actor = 'admin' | 'encoder';
 export type MovementType = 'receive' | 'release' | 'adjust';
@@ -83,6 +84,7 @@ export function postReceipt(db: DatabaseSync, input: ReceiptInput, actor: Actor,
   const note = optionalText(input.note, 200);
   if (input.lines.length === 0) throw new InventoryError('Add at least one line.');
   return tx(db, () => {
+    assertOpen(db, manilaDay(at));
     const supplier = db.prepare('SELECT name FROM suppliers WHERE id = ?').get(input.supplierId) as { name: string } | undefined;
     if (!supplier) throw new InventoryError('Pick a supplier.');
     return input.lines.map((line, i) => {
@@ -106,6 +108,7 @@ export function postRelease(db: DatabaseSync, input: ReleaseInput, actor: Actor,
   const note = optionalText(input.note, 200);
   if (input.lines.length === 0) throw new InventoryError('Add at least one line.');
   return tx(db, () => {
+    assertOpen(db, manilaDay(at));
     // Check stock against the total per item, so two lines of the same item can't sneak past.
     const wanted = new Map<number, number>();
     const checked = input.lines.map((line, i) => {
@@ -140,6 +143,7 @@ export function postAdjustment(
   const delta = round(input.qtyDelta, 3);
   if (!Number.isFinite(delta) || delta === 0) throw new InventoryError('Adjustment must change the quantity.');
   return tx(db, () => {
+    assertOpen(db, manilaDay(at));
     // Inactive items can still hold stock, so a count may correct them.
     const item = loadItem(db, input.itemId, 'Adjustment', true);
     if (item.qty + delta < -1e-9) {

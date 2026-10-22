@@ -2,7 +2,8 @@ import type { DatabaseSync } from 'node:sqlite';
 import { type Actor, InventoryError, postAdjustment } from './inventory';
 import { round } from './num';
 import { tx } from './sqlite';
-import { nowIso } from './time';
+import { assertOpen } from './periods';
+import { manilaDay, nowIso } from './time';
 
 export type CountLineView = {
   lineId: number; itemId: number; sku: string; name: string; unit: string;
@@ -124,6 +125,7 @@ export function refreshExpected(db: DatabaseSync, sessionId: number): number {
 export function postCountSession(db: DatabaseSync, sessionId: number, actor: Actor, at = nowIso()): { adjustments: number } {
   return tx(db, () => {
     openSession(db, sessionId);
+    assertOpen(db, manilaDay(at));
     const counted = getCountSession(db, sessionId)!.lines.filter((l) => l.actual !== null);
     if (counted.length === 0) throw new InventoryError('Enter at least one actual count before posting.');
     // Compare movement ids, not quantities: stock that moved and came back is still a changed shelf.
