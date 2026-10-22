@@ -65,7 +65,10 @@ export default async function PurchasePage({ params, searchParams }: { params: P
                   <TableRow key={s.id} className={s.status === 'void' ? 'text-muted-foreground line-through' : ''}>
                     <TableCell className="font-mono text-xs">{s.number}</TableCell><TableCell>{s.date}</TableCell><TableCell className="capitalize">{s.method}</TableCell><TableCell>{s.refNo}</TableCell>
                     <TableCell className="text-right tabular-nums">{formatPeso(s.amount)}</TableCell>
-                    <TableCell>{s.status === 'posted' && role === 'admin' && p.status === 'posted' && <VoidSupplierPaymentButton paymentId={s.id} />}</TableCell>
+                    <TableCell>
+                      {s.status === 'void' && <span className="text-xs text-muted-foreground">voided{s.voidReason ? `: ${s.voidReason}` : ''}</span>}
+                      {s.status === 'posted' && role === 'admin' && p.status === 'posted' && <VoidSupplierPaymentButton paymentId={s.id} />}
+                    </TableCell>
                   </TableRow>
                 ))}
               </TableBody>

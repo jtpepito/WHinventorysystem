@@ -78,7 +78,10 @@ export default async function SalePage({ params, searchParams }: { params: Promi
                   <TableRow key={p.id} className={p.status === 'void' ? 'text-muted-foreground line-through' : ''}>
                     <TableCell className="font-mono text-xs">{p.number}</TableCell><TableCell>{p.date}</TableCell><TableCell className="capitalize">{p.method}</TableCell><TableCell>{p.refNo}</TableCell>
                     <TableCell className="text-right tabular-nums">{formatPeso(p.amount)}</TableCell>
-                    <TableCell>{p.status === 'posted' && role === 'admin' && sale.status === 'posted' && <VoidPaymentButton paymentId={p.id} />}</TableCell>
+                    <TableCell>
+                      {p.status === 'void' && <span className="text-xs text-muted-foreground no-underline">voided{p.voidReason ? `: ${p.voidReason}` : ''}</span>}
+                      {p.status === 'posted' && role === 'admin' && sale.status === 'posted' && <VoidPaymentButton paymentId={p.id} />}
+                    </TableCell>
                   </TableRow>
                 ))}
               </TableBody>

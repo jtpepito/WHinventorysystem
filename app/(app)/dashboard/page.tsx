@@ -9,7 +9,10 @@ import { getDb } from '@/lib/db';
 import { formatPeso, formatQty } from '@/lib/num';
 import { listMovements } from '@/lib/queries';
 import { buildReport } from '@/lib/reports';
-import { nowIso } from '@/lib/time';
+import { incomeStatement } from '@/lib/finance-reports';
+import { ACC, accountBalance } from '@/lib/ledger';
+import { salesTotals } from '@/lib/sales';
+import { manilaDay, nowIso } from '@/lib/time';
 import { cn } from '@/lib/utils';
 
 export default async function DashboardPage() {
@@ -18,6 +21,18 @@ export default async function DashboardPage() {
   const now = nowIso();
   const s = dashboardStats(db, now);
   const low = buildReport(db, 'low-stock', now).rows.slice(0, 8);
+  const today = manilaDay(now);
+  const month = { from: `${today.slice(0, 7)}-01`, to: today };
+  const todaySales = salesTotals(db, { from: today, to: today });
+  const is = incomeStatement(db, month);
+  const cash = accountBalance(db, ACC.cash) + accountBalance(db, ACC.gcash) + accountBalance(db, ACC.bank);
+  const money = [
+    { label: "Today's sales", value: formatPeso(todaySales.total), sub: `${todaySales.count} sale(s)`, href: `/sales?from=${today}&to=${today}` },
+    { label: 'This month', value: formatPeso(is.netSales), sub: `gross profit ${formatPeso(is.grossProfit)}`, href: '/reports?tab=financial' },
+    { label: 'Cash + GCash + Bank', value: formatPeso(cash), sub: 'per the books', href: '/finance' },
+    { label: 'Receivables', value: formatPeso(accountBalance(db, ACC.ar)), sub: 'customers owe', href: '/customers' },
+    { label: 'Payables', value: formatPeso(accountBalance(db, ACC.ap)), sub: 'owed to suppliers', href: '/purchases?open=1' },
+  ];
   const tiles = [
     { label: 'Active SKUs', value: formatQty(s.totalSkus), href: '/items?status=active' },
     { label: 'Stock value', value: formatPeso(s.stockValue), href: '/reports' },
@@ -27,6 +42,16 @@ export default async function DashboardPage() {
   return (
     <>
       <PageHeader title="Dashboard" />
+      <div className="mb-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+        {money.map((t) => (
+          <Link key={t.label} prefetch={false} href={t.href}>
+            <Card className="h-full transition-colors hover:bg-accent/50">
+              <CardHeader className="pb-1"><CardTitle className="text-sm font-normal text-muted-foreground">{t.label}</CardTitle></CardHeader>
+              <CardContent className="text-xl font-semibold tabular-nums">{t.value}<span className="block text-xs font-normal text-muted-foreground">{t.sub}</span></CardContent>
+            </Card>
+          </Link>
+        ))}
+      </div>
       <div className="mb-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         {tiles.map((t) => (
           <Link key={t.label} href={t.href}>

@@ -68,6 +68,25 @@ New categories and units in the file are created (the preview lists them, so che
 - 100 wrong passwords within 15 minutes from anywhere pause all logins for 5 minutes (a backstop against someone faking addresses).
 - Restarting the app clears every lockout.
 
+## Sales, purchases and the books
+
+The app keeps double-entry books automatically. Every sale, purchase, payment, expense and count posts a balanced journal entry; reports read from those entries, so the same month always shows the same numbers.
+
+- **Sales** (admin and encoder): Sales → New sale. Pick the customer (or leave Walk-in), the payment method (cash, GCash, bank, or on account), and the items; prices fill in from Settings → Selling prices and can be changed per line. Posting takes the stock off the shelf, books the sale, VAT and cost of goods, and gives you a printable receipt. On-account sales show a balance; record collections with **Record payment**.
+- **Purchases**: the Receive page is now Purchase / Receive. Enter the supplier's invoice number, how it was paid (or on account), and tick **VAT invoice** when the receipt is one — the 12% then goes to Input VAT instead of into stock cost. Pay on-account purchases from Purchases → the purchase → **Record payment**.
+- **Expenses** (admin): rent, salaries, utilities and so on, paid from cash, GCash or the bank.
+- **Voids**: posted documents are never edited. An admin voids them with a reason; the stock and the entry are reversed, and the original stays on record. A sale with payments must have the payments voided first.
+- **Manual entries** (Finance → Manual entry): owner capital or drawings, moving cash to the bank, paying VAT to the BIR. Receivables, Inventory and Payables can't be posted by hand; they move only through documents.
+- **VAT**: set once in Settings. VAT-registered shops use VAT-inclusive prices and get Output/Input VAT and a monthly VAT summary. Changing it later applies to new postings only.
+
+## Month-end close
+
+Finance → Month-end close. **Close through** the last day of a finished month and nothing dated on or before it can be posted; reports for that month stop changing. Reopening needs a reason and is logged.
+
+## Reports
+
+Reports → **Sales & financial**: sales by day / item / customer, income statement (for a date range), balance sheet and trial balance (as of a date), receivables and payables aging, VAT summary (per month), cash book and the full journal. Every one downloads as CSV. **Ledger check** also confirms the stock on the shelves equals the Inventory account and that every entry balances.
+
 ## Rules the app enforces
 
 - On-hand qty is cached on each item and updated in the same transaction as each movement. **Ledger check** (`/debug`) compares it with the sum of movements and can rebuild it.
