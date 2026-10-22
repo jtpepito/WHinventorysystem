@@ -8,7 +8,7 @@ import { journalForOpening } from './stock-postings';
 import { manilaDay, nowIso } from './time';
 
 export const MAX_IMPORT_ROWS = 2000;
-const OPENING_SUPPLIER = 'Opening balance';
+import { OPENING_SUPPLIER } from './purchases';
 
 type Field = 'sku' | 'name' | 'category' | 'unit' | 'reorderPoint' | 'qty' | 'unitCost' | 'sellPrice';
 

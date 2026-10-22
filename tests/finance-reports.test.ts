@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   accountLedger, balanceSheet, cashBook, financeCheck, incomeStatement, salesByCustomer, salesByDay, salesByItem, trialBalance, vatSummary,
 } from '@/lib/finance-reports';
-import { accountBalance } from '@/lib/ledger';
+import { accountBalance, postManualJournal } from '@/lib/ledger';
 import { buildReport, isReportKey, REPORT_KEYS } from '@/lib/reports';
 import { financeFixture, MONTH, NOW } from './finance-fixture';
 
@@ -68,8 +68,11 @@ describe('trial balance and ledgers', () => {
 });
 
 describe('VAT and sales analyses', () => {
-  it('summarises the month of VAT', () => {
+  it('summarises the month of VAT from documents only', () => {
     const f = financeFixture();
+    expect(vatSummary(f.db, '2026-10')).toEqual({ outputVat: 54, inputVat: 1320, netPayable: 0, carryOver: 1266 });
+    // Paying last quarter's VAT to the BIR is a manual entry and must not change what the month's documents show.
+    postManualJournal(f.db, { date: '2026-10-20', memo: 'VAT remittance', lines: [{ account: '2200', debit: 240 }, { account: '1300', credit: 120 }, { account: '1010', credit: 120 }] }, 'admin', NOW);
     expect(vatSummary(f.db, '2026-10')).toEqual({ outputVat: 54, inputVat: 1320, netPayable: 0, carryOver: 1266 });
     expect(vatSummary(f.db, '2026-09')).toEqual({ outputVat: 0, inputVat: 0, netPayable: 0, carryOver: 0 });
   });

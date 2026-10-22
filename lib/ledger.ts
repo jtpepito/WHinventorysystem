@@ -5,7 +5,7 @@ import { roundMoney } from './money';
 import { formatPeso } from './num';
 import { assertOpen } from './periods';
 import { tx } from './sqlite';
-import { nowIso } from './time';
+import { isDay, manilaDay, nowIso } from './time';
 
 export const ACC = {
   cash: '1010', gcash: '1020', bank: '1030', ar: '1100', inventory: '1200', inputVat: '1300',
@@ -108,6 +108,8 @@ function cleanLines(db: DatabaseSync, lines: JournalLineInput[]): CleanLine[] {
 export type JournalInput = { date: string; sourceType: string; sourceId: number | null; memo: string; lines: JournalLineInput[] };
 
 export function postJournal(db: DatabaseSync, e: JournalInput, actor: Actor, at = nowIso()): number {
+  if (!isDay(e.date)) throw new InventoryError('Pick a valid date.');
+  if (e.date > manilaDay(at)) throw new InventoryError('The date cannot be in the future.');
   return tx(db, () => {
     assertOpen(db, e.date);
     const lines = cleanLines(db, e.lines);
@@ -119,6 +121,16 @@ export function postJournal(db: DatabaseSync, e: JournalInput, actor: Actor, at 
     for (const l of lines) insert.run(id, l.accountId, l.debit, l.credit);
     return id;
   });
+}
+
+// When a void cannot carry its full value in the average cost, the difference is booked so stock and books agree.
+export function postRevaluationResidual(db: DatabaseSync, r: { date: string; sourceType: string; sourceId: number | null; memo: string; residual: number }, actor: Actor, at = nowIso()): number | null {
+  const amount = roundMoney(Math.abs(r.residual));
+  if (amount === 0) return null;
+  const lines = r.residual > 0
+    ? [{ account: ACC.inventory, debit: amount }, { account: ACC.shrink, credit: amount }]
+    : [{ account: ACC.shrink, debit: amount }, { account: ACC.inventory, credit: amount }];
+  return postJournal(db, { date: r.date, sourceType: r.sourceType, sourceId: r.sourceId, memo: r.memo, lines }, actor, at);
 }
 
 export function reverseJournal(db: DatabaseSync, entryId: number, r: { date: string; sourceType: string; sourceId: number | null; memo: string }, actor: Actor, at = nowIso()): number {

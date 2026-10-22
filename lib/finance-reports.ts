@@ -10,11 +10,12 @@ const DEBIT_SIDE: AccountType[] = ['asset', 'expense'];
 const natural = (type: AccountType, dr: number, cr: number) => roundMoney(DEBIT_SIDE.includes(type) ? dr - cr : cr - dr);
 
 // Σdebit / Σcredit per account over a date window, in one query.
-function sums(db: DatabaseSync, opts: { from?: string; through?: string }): Map<string, { dr: number; cr: number }> {
+function sums(db: DatabaseSync, opts: { from?: string; through?: string; documentsOnly?: boolean }): Map<string, { dr: number; cr: number }> {
   const where: string[] = [];
   const params: string[] = [];
   if (opts.from) { where.push('e.date >= ?'); params.push(opts.from); }
   if (opts.through) { where.push('e.date <= ?'); params.push(opts.through); }
+  if (opts.documentsOnly) where.push("e.source_type <> 'manual'");
   const rows = db
     .prepare(`SELECT a.code, COALESCE(SUM(l.debit), 0) AS dr, COALESCE(SUM(l.credit), 0) AS cr FROM journal_lines l
       JOIN journal_entries e ON e.id = l.entry_id JOIN accounts a ON a.id = l.account_id${where.length ? ` WHERE ${where.join(' AND ')}` : ''} GROUP BY a.code`)
@@ -121,7 +122,8 @@ export type VatSummary = { outputVat: number; inputVat: number; netPayable: numb
 export function vatSummary(db: DatabaseSync, month: string): VatSummary {
   const from = `${month}-01`;
   const to = addDays(addDays(from, 31).slice(0, 7) + '-01', -1);
-  const s = sums(db, { from, through: to });
+  // Documents only: the owner's own VAT remittance (a manual entry) is a payment of the liability, not the month's VAT.
+  const s = sums(db, { from, through: to, documentsOnly: true });
   const outputVat = roundMoney((s.get(ACC.outputVat)?.cr ?? 0) - (s.get(ACC.outputVat)?.dr ?? 0));
   const inputVat = roundMoney((s.get(ACC.inputVat)?.dr ?? 0) - (s.get(ACC.inputVat)?.cr ?? 0));
   return { outputVat, inputVat, netPayable: Math.max(0, roundMoney(outputVat - inputVat)), carryOver: Math.max(0, roundMoney(inputVat - outputVat)) };
@@ -154,11 +156,14 @@ export type FinanceCheck = { stockValue: number; inventoryGl: number; match: boo
 
 // Stock on the shelves (Σ qty × avg cost) must equal the Inventory account, and every entry must balance.
 export function financeCheck(db: DatabaseSync): FinanceCheck {
-  const { value, n } = db.prepare('SELECT ROUND(COALESCE(SUM(qty * avg_cost), 0), 2) AS value, COUNT(*) AS n FROM items').get() as { value: number; n: number };
+  const { value } = db.prepare('SELECT ROUND(COALESCE(SUM(qty * avg_cost), 0), 2) AS value FROM items').get() as { value: number };
   const inventoryGl = accountBalance(db, ACC.inventory);
   const unbalancedEntries = (db
     .prepare('SELECT entry_id FROM journal_lines GROUP BY entry_id HAVING ABS(ROUND(SUM(debit) - SUM(credit), 2)) > 0')
     .all() as { entry_id: number }[]).map((r) => r.entry_id);
-  const tolerance = Math.max(0.05, 0.05 * n);
+  // Purchases are exact. Each sale or count rounds its cost to the centavo against a 4-dp average,
+  // so allow half a centavo per such posting on top of a small floor.
+  const { docs } = db.prepare("SELECT (SELECT COUNT(*) FROM sales) + (SELECT COUNT(*) FROM count_sessions WHERE posted_at IS NOT NULL) AS docs").get() as { docs: number };
+  const tolerance = 0.05 + 0.005 * docs;
   return { stockValue: value, inventoryGl, match: Math.abs(value - inventoryGl) <= tolerance && unbalancedEntries.length === 0, unbalancedEntries };
 }

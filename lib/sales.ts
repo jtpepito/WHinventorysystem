@@ -1,7 +1,7 @@
 import type { DatabaseSync } from 'node:sqlite';
 import { getCustomer, WALK_IN } from './customers';
-import { type Actor, checkQty, InventoryError, postAdjustment, postRelease } from './inventory';
-import { ACC, cashAccountFor, journalEntryFor, type JournalLineInput, nextNumber, type PayMethod, postJournal, reverseJournal } from './ledger';
+import { type Actor, checkQty, InventoryError, postRelease, postRevaluedAdjustment } from './inventory';
+import { ACC, cashAccountFor, journalEntryFor, type JournalLineInput, nextNumber, type PayMethod, postJournal, postRevaluationResidual, reverseJournal } from './ledger';
 import { checkMoney, roundMoney, vatSplit } from './money';
 import { assertOpen } from './periods';
 import { vatRegistered } from './settings';
@@ -96,12 +96,14 @@ export function voidSale(db: DatabaseSync, id: number, reason: string, actor: Ac
     const today = manilaDay(at);
     assertOpen(db, s.date);
     assertOpen(db, today);
+    let residual = 0;
     for (const l of s.lines) {
-      postAdjustment(db, { itemId: l.itemId, qtyDelta: l.qty, refNo: s.number, note: `Void ${s.number}`, unitCost: l.unitCost, saleId: id }, actor, at);
+      residual += postRevaluedAdjustment(db, { itemId: l.itemId, qtyDelta: l.qty, refNo: s.number, note: `Void ${s.number}`, unitCost: l.unitCost, saleId: id }, actor, at).residual;
     }
     const entry = journalEntryFor(db, 'sale', id);
     if (entry === null) throw new InventoryError(`${s.number} has no journal entry to reverse.`);
     reverseJournal(db, entry, { date: today, sourceType: 'sale_void', sourceId: id, memo: `Void ${s.number}: ${why}` }, actor, at);
+    postRevaluationResidual(db, { date: today, sourceType: 'sale_void', sourceId: id, memo: `Revaluation on void of ${s.number}`, residual }, actor, at);
     db.prepare("UPDATE sales SET status = 'void', void_reason = ?, voided_at = ? WHERE id = ?").run(why, at, id);
   });
 }

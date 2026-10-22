@@ -68,6 +68,15 @@ describe('postJournal', () => {
     expect(() => postJournal(db, { date: D, sourceType: 'manual', sourceId: null, memo: '', lines: [{ account: '9999', debit: 1 }, { account: '1010', credit: 1 }] }, 'admin')).toThrow(/Account 9999/);
     expect(db.prepare('SELECT COUNT(*) AS n FROM journal_entries').get()).toMatchObject({ n: 0 });
   });
+  it('needs a real date no later than the posting moment', () => {
+    const { db } = fixture();
+    const lines = [{ account: '1010', debit: 1 }, { account: '3100', credit: 1 }];
+    for (const bad of ['zzz', '2026-9-15', '', '2026-02-30']) {
+      expect(() => postJournal(db, { date: bad, sourceType: 'manual', sourceId: null, memo: '', lines }, 'admin', '2026-10-02T04:00:00.000Z')).toThrow('Pick a valid date.');
+    }
+    expect(() => postJournal(db, { date: '2026-10-03', sourceType: 'manual', sourceId: null, memo: '', lines }, 'admin', '2026-10-02T04:00:00.000Z')).toThrow('The date cannot be in the future.');
+    postJournal(db, { date: '2026-10-02', sourceType: 'manual', sourceId: null, memo: '', lines }, 'admin', '2026-10-02T04:00:00.000Z');
+  });
   it('drops zero lines', () => {
     const { db } = fixture();
     postJournal(db, { date: D, sourceType: 'manual', sourceId: null, memo: '', lines: [{ account: '1010', debit: 0 }, { account: '1030', debit: 5 }, { account: '1010', credit: 5 }] }, 'admin');

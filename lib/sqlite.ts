@@ -1,5 +1,6 @@
 import { DatabaseSync } from 'node:sqlite';
 import { ensureChart } from './chart';
+import { cutOverOpeningStock } from './cutover';
 import { DOCUMENT_TRIGGERS, SCHEMA } from './schema';
 
 export function openDb(file: string): DatabaseSync {
@@ -10,6 +11,7 @@ export function openDb(file: string): DatabaseSync {
   db.exec(DOCUMENT_TRIGGERS);
   migrate(db);
   ensureChart(db); // postings need the system accounts on every database, including ones created before accounting existed
+  cutOverOpeningStock(db); // and stock that predates accounting gets booked once as capital
   return db;
 }
 

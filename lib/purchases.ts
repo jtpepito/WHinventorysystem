@@ -1,7 +1,10 @@
 import type { DatabaseSync } from 'node:sqlite';
-import { type Actor, checkCost, checkQty, InventoryError, postAdjustment, postReceipt, type ReceiptLine } from './inventory';
-import { ACC, cashAccountFor, isPayMethod, journalEntryFor, type JournalLineInput, nextNumber, type PayMethod, postJournal, reverseJournal } from './ledger';
-import { checkMoney, roundMoney, VAT_RATE, vatSplit } from './money';
+import { type Actor, checkCost, checkQty, InventoryError, postReceipt, postRevaluedAdjustment, type ReceiptLine } from './inventory';
+import { ACC, cashAccountFor, isPayMethod, journalEntryFor, type JournalLineInput, nextNumber, type PayMethod, postJournal, postRevaluationResidual, reverseJournal } from './ledger';
+import { checkMoney, roundMoney, VAT_RATE } from './money';
+
+// The supplier name that means "this stock is the owner's, not bought from anyone" (also used by the CSV import).
+export const OPENING_SUPPLIER = 'Opening balance';
 import { formatPeso, formatQty, round } from './num';
 import { assertOpen } from './periods';
 import { vatRegistered } from './settings';
@@ -31,7 +34,9 @@ export function postPurchase(db: DatabaseSync, input: PurchaseInput, actor: Acto
     assertOpen(db, input.date);
     const supplier = db.prepare('SELECT name FROM suppliers WHERE id = ?').get(input.supplierId) as { name: string } | undefined;
     if (!supplier) throw new InventoryError('Pick a supplier.');
-    const withVat = vatRegistered(db) && input.vatInvoice;
+    // Stock entered under the "Opening balance" supplier is the owner's capital, not a purchase from anyone.
+    const isOpening = supplier.name.trim().toLowerCase() === OPENING_SUPPLIER.toLowerCase();
+    const withVat = !isOpening && vatRegistered(db) && input.vatInvoice;
     // Gross as printed on the invoice; with a VAT invoice the recoverable VAT is kept out of stock cost.
     const lines = input.lines.map((l, i) => {
       const label = l.label ?? `Line ${i + 1}`;
@@ -41,7 +46,10 @@ export function postPurchase(db: DatabaseSync, input: PurchaseInput, actor: Acto
       return { itemId: l.itemId, qty, unitCost, lineTotal: roundMoney(qty * gross), label };
     });
     const total = roundMoney(lines.reduce((s, l) => s + l.lineTotal, 0));
-    const { net, vat } = vatSplit(total, withVat);
+    // Inventory is debited with exactly what the stock records carry (Σ qty × net unit cost, to the centavo);
+    // the VAT is whatever remains of the invoice total, so stock and books agree purchase by purchase.
+    const net = withVat ? roundMoney(lines.reduce((s, l) => s + roundMoney(l.qty * l.unitCost), 0)) : total;
+    const vat = withVat ? roundMoney(total - net) : 0;
     const number = nextNumber(db, 'PUR');
     const id = Number(
       db.prepare(`INSERT INTO purchases (number, date, supplier_id, supplier_name, ref_no, payment_method, subtotal, vat, total, vat_invoice, note, actor, created_at)
@@ -52,7 +60,7 @@ export function postPurchase(db: DatabaseSync, input: PurchaseInput, actor: Acto
     const journal: JournalLineInput[] = [
       { account: ACC.inventory, debit: net },
       { account: ACC.inputVat, debit: vat },
-      { account: input.method === 'credit' ? ACC.ap : cashAccountFor(input.method), credit: total },
+      { account: isOpening ? ACC.capital : input.method === 'credit' ? ACC.ap : cashAccountFor(input.method), credit: total },
     ];
     postJournal(db, { date: input.date, sourceType: 'purchase', sourceId: id, memo: `${number} ${supplier.name} inv ${refNo}`, lines: journal }, actor, at);
     return { id, number, total };
@@ -77,12 +85,14 @@ export function voidPurchase(db: DatabaseSync, id: number, reason: string, actor
         throw new InventoryError(`${l.sku} has only ${formatQty(onHand)} on hand; ${formatQty(l.qty)} were received on this purchase. Adjust stock first.`);
       }
     }
+    let residual = 0;
     for (const l of p.lines) {
-      postAdjustment(db, { itemId: l.itemId, qtyDelta: -l.qty, refNo: p.number, note: `Void ${p.number}`, unitCost: l.unitCost, purchaseId: id }, actor, at);
+      residual += postRevaluedAdjustment(db, { itemId: l.itemId, qtyDelta: -l.qty, refNo: p.number, note: `Void ${p.number}`, unitCost: l.unitCost, purchaseId: id }, actor, at).residual;
     }
     const entry = journalEntryFor(db, 'purchase', id);
     if (entry === null) throw new InventoryError(`${p.number} has no journal entry to reverse.`);
     reverseJournal(db, entry, { date: today, sourceType: 'purchase_void', sourceId: id, memo: `Void ${p.number}: ${why}` }, actor, at);
+    postRevaluationResidual(db, { date: today, sourceType: 'purchase_void', sourceId: id, memo: `Revaluation on void of ${p.number}`, residual }, actor, at);
     db.prepare("UPDATE purchases SET status = 'void', void_reason = ?, voided_at = ? WHERE id = ?").run(why, at, id);
   });
 }
@@ -148,6 +158,7 @@ export function postSupplierPayment(db: DatabaseSync, input: SupplierPaymentInpu
     if (p.status === 'void') throw new InventoryError(`${p.number} is void.`);
     if (p.method !== 'credit') throw new InventoryError(`${p.number} is not on account; it was paid when it was received.`);
     if (amount > p.balance + 1e-9) throw new InventoryError(`Only ${formatPeso(p.balance)} is still owed on ${p.number}.`);
+    if (input.date < p.date) throw new InventoryError(`A payment cannot be dated before its purchase (${p.date}).`);
     const number = nextNumber(db, 'PV');
     const id = Number(
       db.prepare('INSERT INTO supplier_payments (number, date, supplier_id, purchase_id, amount, method, ref_no, note, actor, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')

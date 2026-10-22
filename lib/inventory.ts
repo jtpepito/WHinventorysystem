@@ -30,10 +30,12 @@ export function checkCost(n: number, label: string): number {
   return round(n, 4);
 }
 
+// The average is kept at full precision and each lot comes in at its centavo-rounded value, so
+// Σ qty × avg_cost is exactly what the books were debited; it is only rounded when shown.
 export function weightedAverage(oldQty: number, oldAvg: number, rcvQty: number, rcvCost: number): number {
   const base = Math.max(oldQty, 0);
   if (base + rcvQty <= 0) return rcvCost;
-  return round((base * oldAvg + rcvQty * rcvCost) / (base + rcvQty), 4);
+  return (base * oldAvg + round(rcvQty * rcvCost, 2)) / (base + rcvQty);
 }
 
 type ItemRow = { id: number; sku: string; name: string; qty: number; avg_cost: number; active: number; unit: string };
@@ -155,7 +157,36 @@ export function postAdjustment(
   });
 }
 
-export type DuplicateRefQuery = { type: 'receive'; refNo: string; supplierId: number } | { type: 'release'; refNo: string };
+// A void returns (or removes) a lot at the cost it carried, and re-averages so stock value moves by exactly
+// delta × unitCost. When that cannot be carried in the average (stock hits zero, or the lot is worth more than
+// what is left), the difference comes back as `residual` for the caller to book against shrinkage.
+export function postRevaluedAdjustment(
+  db: DatabaseSync,
+  input: { itemId: number; qtyDelta: number; refNo: string; note: string; unitCost: number; saleId?: number; purchaseId?: number },
+  actor: Actor,
+  at = nowIso(),
+): { movementId: number; residual: number } {
+  const delta = round(input.qtyDelta, 3);
+  if (!Number.isFinite(delta) || delta === 0) throw new InventoryError('Adjustment must change the quantity.');
+  return tx(db, () => {
+    const item = loadItem(db, input.itemId, 'Adjustment', true);
+    const newQty = round(item.qty + delta, 3);
+    if (newQty < -1e-9) throw new InventoryError(`Adjustment would take ${item.sku} below zero (on hand ${formatQty(item.qty)}).`);
+    const before = item.qty * item.avg_cost;
+    const wanted = before + delta * input.unitCost;
+    const newAvg = newQty > 0 ? Math.max(0, wanted / newQty) : item.avg_cost;
+    const after = newQty > 0 ? newQty * newAvg : 0;
+    const residual = round(after - before - delta * input.unitCost, 2);
+    db.prepare('UPDATE items SET qty = ?, avg_cost = ? WHERE id = ?').run(newQty, newAvg, item.id);
+    const movementId = insertMovement(db, {
+      itemId: item.id, type: 'adjust', qtyDelta: delta, unitCost: input.unitCost, refNo: input.refNo, counterparty: '', note: input.note,
+      actor, at, saleId: input.saleId, purchaseId: input.purchaseId,
+    });
+    return { movementId, residual };
+  });
+}
+
+export type DuplicateRefQuery ={ type: 'receive'; refNo: string; supplierId: number } | { type: 'release'; refNo: string };
 
 // Soft check before posting: has this reference been posted before? Receipts match per supplier
 // (suppliers can share invoice numbers); releases match on the shop's own DR number alone.

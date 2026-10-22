@@ -58,6 +58,11 @@ describe('customer payments', () => {
     voidSale(f.db, sale.id, 'wrong customer', 'admin', '2026-10-03T00:00:00.000Z');
     expect(getSale(f.db, sale.id)?.status).toBe('void');
   });
+  it('cannot be dated before its sale', () => {
+    const f = fixture();
+    const sale = credit(f, f.customer, 1, '2026-10-02', AT);
+    expect(() => postCustomerPayment(f.db, { date: '2026-10-01', saleId: sale.id, amount: 10, method: 'cash' }, 'admin', AT)).toThrow('A payment cannot be dated before its sale (2026-10-02).');
+  });
   it('checks the payment date against the lock, not the sale date', () => {
     const f = fixture();
     const sale = credit(f, f.customer, 1, '2026-09-15', '2026-09-15T00:00:00.000Z');

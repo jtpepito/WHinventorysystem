@@ -50,10 +50,33 @@ describe('accounting schema', () => {
     expect(() => db.prepare('UPDATE sales SET total = 1 WHERE id = ?').run(id)).toThrow(/immutable/);
     expect(() => db.prepare('DELETE FROM sales WHERE id = ?').run(id)).toThrow(/immutable/);
   });
-  it('refuses a void that also changes the amount', () => {
+  it('refuses a void that also changes any other column', () => {
     const { db } = makeDb();
     const id = withSale(db);
     expect(() => db.prepare("UPDATE sales SET status = 'void', total = 1 WHERE id = ?").run(id)).toThrow(/immutable/);
+    expect(() => db.prepare("UPDATE sales SET status = 'void', subtotal = 1 WHERE id = ?").run(id)).toThrow(/immutable/);
+    expect(() => db.prepare("UPDATE sales SET status = 'void', customer_name = 'X' WHERE id = ?").run(id)).toThrow(/immutable/);
+    expect(() => db.prepare("UPDATE sales SET status = 'void', payment_method = 'credit' WHERE id = ?").run(id)).toThrow(/immutable/);
+    expect(() => db.prepare("UPDATE sales SET status = 'void', cogs = 0 WHERE id = ?").run(id)).toThrow(/immutable/);
+  });
+  it('books stock that existed before accounting as opening capital, once', () => {
+    const file = path.join(os.tmpdir(), `inv-cutover-${process.pid}-${Date.now()}.db`);
+    const v1 = openDb(file);
+    v1.prepare("INSERT INTO categories (name) VALUES ('Tools')").run();
+    v1.prepare("INSERT INTO units (name) VALUES ('pc')").run();
+    v1.prepare("INSERT INTO items (sku, name, category_id, unit_id, qty, avg_cost) VALUES ('T-1', 'Hammer', 1, 1, 10, 50)").run();
+    v1.prepare("INSERT INTO items (sku, name, category_id, unit_id, qty, avg_cost) VALUES ('T-2', 'Saw', 1, 1, 4, 12.5)").run();
+    v1.close();
+    const db = openDb(file);
+    const entries = () => (db.prepare("SELECT COUNT(*) AS n FROM journal_entries WHERE source_type = 'opening'").get() as { n: number }).n;
+    expect(entries()).toBe(1);
+    const lines = db.prepare('SELECT a.code, l.debit, l.credit FROM journal_lines l JOIN accounts a ON a.id = l.account_id ORDER BY l.id').all().map((r) => ({ ...(r as object) }));
+    expect(lines).toEqual([{ code: '1200', debit: 550, credit: 0 }, { code: '3100', debit: 0, credit: 550 }]);
+    db.close();
+    const again = openDb(file);
+    expect((again.prepare("SELECT COUNT(*) AS n FROM journal_entries").get() as { n: number }).n).toBe(1);
+    again.close();
+    fs.rmSync(file, { force: true });
   });
   it('journal lines carry a debit or a credit, never both or neither', () => {
     const { db } = makeDb();

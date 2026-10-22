@@ -16,9 +16,10 @@ describe('weightedAverage', () => {
   it('uses the receipt cost when nothing is on hand', () => {
     expect(weightedAverage(0, 0, 10, 50)).toBe(50);
   });
-  it('blends by quantity and rounds to 4 dp', () => {
+  it('blends by quantity at full precision, taking each lot in at its centavo value', () => {
     expect(weightedAverage(10, 50, 10, 100)).toBe(75);
-    expect(weightedAverage(1, 10, 2, 10.01)).toBe(10.0067);
+    expect(weightedAverage(1, 10, 2, 10.01)).toBeCloseTo(10.0066667, 7);
+    expect(weightedAverage(0, 0, 3, 17.8528)).toBe(53.56 / 3); // 53.5584 rounds to 53.56 on the books
   });
 });
 

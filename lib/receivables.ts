@@ -33,6 +33,7 @@ export function postCustomerPayment(db: DatabaseSync, input: CustomerPaymentInpu
     if (s.status === 'void') throw new InventoryError(`${s.number} is void.`);
     if (s.method !== 'credit' || s.customerId === null) throw new InventoryError(`${s.number} is not on account; it was paid when it was made.`);
     if (amount > s.balance + 1e-9) throw new InventoryError(`Only ${formatPeso(s.balance)} is still owed on ${s.number}.`);
+    if (input.date < s.date) throw new InventoryError(`A payment cannot be dated before its sale (${s.date}).`);
     const number = nextNumber(db, 'CR');
     const id = Number(
       db.prepare('INSERT INTO customer_payments (number, date, customer_id, sale_id, amount, method, ref_no, note, actor, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')

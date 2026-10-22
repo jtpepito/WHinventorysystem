@@ -226,21 +226,23 @@ CREATE TABLE IF NOT EXISTS expenses (
 CREATE INDEX IF NOT EXISTS expenses_date ON expenses(date);
 `;
 
-// Documents can only ever change posted → void, and only their void columns.
-const DOCUMENT_TABLES: { table: string; amountCol: string }[] = [
-  { table: 'sales', amountCol: 'total' },
-  { table: 'purchases', amountCol: 'total' },
-  { table: 'customer_payments', amountCol: 'amount' },
-  { table: 'supplier_payments', amountCol: 'amount' },
-  { table: 'expenses', amountCol: 'amount' },
+// Documents can only ever change posted → void, and only their void columns: every other column must stay put.
+const DOCUMENT_TABLES: { table: string; columns: string[] }[] = [
+  { table: 'sales', columns: ['number', 'date', 'customer_id', 'customer_name', 'payment_method', 'subtotal', 'vat', 'total', 'cogs', 'note', 'actor', 'created_at'] },
+  { table: 'purchases', columns: ['number', 'date', 'supplier_id', 'supplier_name', 'ref_no', 'payment_method', 'subtotal', 'vat', 'total', 'vat_invoice', 'note', 'actor', 'created_at'] },
+  { table: 'customer_payments', columns: ['number', 'date', 'customer_id', 'sale_id', 'amount', 'method', 'ref_no', 'note', 'actor', 'created_at'] },
+  { table: 'supplier_payments', columns: ['number', 'date', 'supplier_id', 'purchase_id', 'amount', 'method', 'ref_no', 'note', 'actor', 'created_at'] },
+  { table: 'expenses', columns: ['number', 'date', 'account_id', 'payee', 'amount', 'vat_input', 'vat_invoice', 'method', 'supplier_id', 'ref_no', 'note', 'actor', 'created_at'] },
 ];
 
+// The void trigger is dropped and recreated on every open so an older database picks up the full column list.
 export const DOCUMENT_TRIGGERS = DOCUMENT_TABLES.map(
-  ({ table, amountCol }) => `
+  ({ table, columns }) => `
 CREATE TRIGGER IF NOT EXISTS ${table}_no_delete BEFORE DELETE ON ${table}
 BEGIN SELECT RAISE(ABORT, '${table} are immutable'); END;
-CREATE TRIGGER IF NOT EXISTS ${table}_void_only BEFORE UPDATE ON ${table}
+DROP TRIGGER IF EXISTS ${table}_void_only;
+CREATE TRIGGER ${table}_void_only BEFORE UPDATE ON ${table}
 WHEN NOT (OLD.status = 'posted' AND NEW.status = 'void'
-  AND NEW.${amountCol} = OLD.${amountCol} AND NEW.date = OLD.date AND NEW.number = OLD.number)
+  AND ${columns.map((c) => `NEW.${c} IS OLD.${c}`).join(' AND ')})
 BEGIN SELECT RAISE(ABORT, '${table} are immutable'); END;`,
 ).join('\n');

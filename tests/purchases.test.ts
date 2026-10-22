@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { financeCheck } from '@/lib/finance-reports';
 import { duplicateRefWarning, postRelease } from '@/lib/inventory';
 import { accountBalance, seedChart } from '@/lib/ledger';
 import { apAging, getPurchase, listPurchases, postPurchase, postSupplierPayment, purchaseOpenBalance, voidPurchase, voidSupplierPayment } from '@/lib/purchases';
@@ -16,7 +17,7 @@ function fixture() {
 const lastLines = (f: Fixture) =>
   plain(f.db.prepare('SELECT a.code, l.debit, l.credit FROM journal_lines l JOIN accounts a ON a.id = l.account_id WHERE l.entry_id = (SELECT MAX(id) FROM journal_entries) ORDER BY l.id').all());
 const buy = (f: Fixture, opts: Partial<Parameters<typeof postPurchase>[1]> = {}) =>
-  postPurchase(f.db, { date: D, supplierId: f.supplier, refNo: 'INV-77', method: 'cash', vatInvoice: true, lines: [{ itemId: f.item, qty: 10, unitCost: 112 }], ...opts }, 'encoder', AT);
+  postPurchase(f.db, { date: D, supplierId: f.supplier, refNo: 'INV-77', method: 'cash', vatInvoice: true, lines: [{ itemId: f.item, qty: 10, unitCost: 112 }], ...opts }, 'encoder', opts.date ? `${opts.date}T04:00:00.000Z` : AT);
 
 describe('postPurchase', () => {
   it('ACCEPTANCE: a VAT invoice puts the net cost into stock and the VAT into Input VAT', () => {
@@ -68,6 +69,36 @@ describe('postPurchase', () => {
     expect(() => buy(f, { supplierId: 999 })).toThrow(/supplier/);
     expect(f.db.prepare('SELECT COUNT(*) AS n FROM purchases').get()).toMatchObject({ n: 0 });
     expect(f.db.prepare('SELECT COUNT(*) AS n FROM journal_entries').get()).toMatchObject({ n: 0 });
+  });
+});
+
+describe('opening stock through Receive', () => {
+  it('posts the "Opening balance" supplier to capital, with no VAT and no cash', () => {
+    const f = fixture();
+    const opening = Number(f.db.prepare("INSERT INTO suppliers (name) VALUES ('Opening balance')").run().lastInsertRowid);
+    postPurchase(f.db, { date: D, supplierId: opening, refNo: 'OB-1', method: 'cash', vatInvoice: true, lines: [{ itemId: f.item, qty: 10, unitCost: 50 }] }, 'admin', AT);
+    expect(avgOf(f.db, f.item)).toBe(50);
+    expect(lastLines(f)).toEqual([{ code: '1200', debit: 500, credit: 0 }, { code: '3100', debit: 0, credit: 500 }]);
+    expect(accountBalance(f.db, '1010')).toBe(0);
+  });
+});
+
+describe('supplier payment dates', () => {
+  it('cannot be dated before the purchase', () => {
+    const f = fixture();
+    const r = buy(f, { method: 'credit' });
+    expect(() => postSupplierPayment(f.db, { date: '2026-10-01', purchaseId: r.id, amount: 10, method: 'cash' }, 'admin', AT)).toThrow('A payment cannot be dated before its purchase (2026-10-02).');
+  });
+});
+
+describe('VAT purchases keep stock and books exact', () => {
+  it('debits Inventory with the sum of rounded line costs, so fifty purchases drift by nothing', () => {
+    const f = fixture();
+    for (let i = 0; i < 50; i++) {
+      postPurchase(f.db, { date: D, supplierId: f.supplier, refNo: `V-${i}`, method: 'cash', vatInvoice: true, lines: [{ itemId: f.item, qty: 3, unitCost: 19.99 }, { itemId: f.item2, qty: 7, unitCost: 1.07 }] }, 'admin', AT);
+    }
+    const chk = financeCheck(f.db);
+    expect(Math.abs(chk.stockValue - chk.inventoryGl)).toBeLessThan(0.005);
   });
 });
 
