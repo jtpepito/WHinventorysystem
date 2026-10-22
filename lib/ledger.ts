@@ -148,6 +148,14 @@ export function assertNotControlled(lines: JournalLineInput[]): void {
   }
 }
 
+// Admin-entered entries (capital, drawings, cash→bank deposits, VAT remittance …). Documents own AR/Inventory/AP.
+export function postManualJournal(db: DatabaseSync, e: { date: string; memo: string; lines: JournalLineInput[] }, actor: Actor, at = nowIso()): number {
+  const memo = e.memo.trim();
+  if (!memo) throw new InventoryError('Give the entry a memo saying what it is for.');
+  assertNotControlled(e.lines);
+  return postJournal(db, { date: e.date, sourceType: 'manual', sourceId: null, memo, lines: e.lines }, actor, at);
+}
+
 export function journalEntryFor(db: DatabaseSync, sourceType: string, sourceId: number): number | null {
   const r = db.prepare('SELECT id FROM journal_entries WHERE source_type = ? AND source_id = ? ORDER BY id LIMIT 1').get(sourceType, sourceId) as { id: number } | undefined;
   return r?.id ?? null;
