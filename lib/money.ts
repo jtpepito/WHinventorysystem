@@ -1,4 +1,4 @@
-import { InventoryError } from './inventory';
+import { InventoryError } from './errors';
 import { round } from './num';
 
 export const VAT_RATE = 0.12;

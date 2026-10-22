@@ -27,7 +27,7 @@ const LINKS = [
 export function Nav({ role }: { role: Role }) {
   const pathname = usePathname();
   return (
-    <aside className="border-b bg-muted/40 md:min-h-screen md:w-56 md:shrink-0 md:border-b-0 md:border-r">
+    <aside className="border-b bg-muted/40 print:hidden md:min-h-screen md:w-56 md:shrink-0 md:border-b-0 md:border-r">
       <div className="px-4 py-3">
         <p className="font-semibold">Inventory</p>
         <p className="text-xs text-muted-foreground">Signed in as {role === 'admin' ? 'Admin' : 'Encoder'}</p>

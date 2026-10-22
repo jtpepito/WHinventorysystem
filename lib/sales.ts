@@ -11,6 +11,7 @@ import { isDay, manilaDay, nowIso } from './time';
 export type SaleMethod = PayMethod | 'credit';
 export const SALE_METHODS: SaleMethod[] = ['cash', 'gcash', 'bank', 'credit'];
 export const isSaleMethod = (s: unknown): s is SaleMethod => (SALE_METHODS as unknown[]).includes(s);
+export const SALE_METHOD_LABEL: Record<SaleMethod, string> = { cash: 'Cash', gcash: 'GCash', bank: 'Bank', credit: 'On account' };
 
 export type SaleLineInput = { itemId: number; qty: number; unitPrice: number; label?: string };
 export type SaleInput = { date: string; customerId: number | null; method: SaleMethod; note?: string; lines: SaleLineInput[] };

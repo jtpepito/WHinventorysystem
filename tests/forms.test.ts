@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { parseCountEntries, parseReceiptLines, parseReleaseLines, parseReorderUpdates, parseSellPriceUpdates, readItemForm } from '@/lib/forms';
+import { parseCountEntries, parseReceiptLines, parseReleaseLines, parseReorderUpdates, parseSaleLines, parseSellPriceUpdates, readItemForm } from '@/lib/forms';
 import { postReceipt, postRelease } from '@/lib/inventory';
 import { makeDb } from './helpers';
 
@@ -51,6 +51,17 @@ describe('parseReorderUpdates', () => {
   it('parses and names bad rows by SKU', () => {
     expect(parseReorderUpdates(j([{ itemId: 1, sku: 'A', reorderPoint: '5' }]))).toEqual([{ itemId: 1, reorderPoint: 5 }]);
     expect(() => parseReorderUpdates(j([{ itemId: 1, sku: 'A', reorderPoint: '' }]))).toThrow('A: enter a reorder point.');
+  });
+});
+
+describe('parseSaleLines', () => {
+  it('parses item, qty and price with on-screen row labels', () => {
+    expect(parseSaleLines(j([{ itemId: '3', qty: '2', unitPrice: '1,250.50' }, { itemId: '', qty: '', unitPrice: '' }, { itemId: '4', qty: '1', unitPrice: '0' }]))).toEqual([
+      { itemId: 3, qty: 2, unitPrice: 1250.5, label: 'Line 1' },
+      { itemId: 4, qty: 1, unitPrice: 0, label: 'Line 3' },
+    ]);
+    expect(() => parseSaleLines(j([{ itemId: '3', qty: '2', unitPrice: 'free' }]))).toThrow('Line 1: enter a valid price.');
+    expect(() => parseSaleLines(j([{ itemId: '', qty: '2', unitPrice: '5' }]))).toThrow('Line 1: pick an item.');
   });
 });
 

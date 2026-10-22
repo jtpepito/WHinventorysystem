@@ -1,6 +1,7 @@
 import type { ItemInput } from './catalog';
 import { InventoryError, type ReceiptLine, type ReleaseLine } from './inventory';
 import { parseNumberInput } from './num';
+import type { SaleLineInput } from './sales';
 
 const isBlank = (v: unknown) => v === undefined || v === null || String(v).trim() === '';
 
@@ -47,6 +48,15 @@ export function parseReleaseLines(raw: string): ReleaseLine[] {
   return rows(raw, ['itemId', 'qty']).map(({ label, row }) => ({
     itemId: itemIdOf(row.itemId, label),
     qty: num(row.qty, `${label}: enter a valid quantity.`),
+    label,
+  }));
+}
+
+export function parseSaleLines(raw: string): SaleLineInput[] {
+  return rows(raw, ['itemId', 'qty', 'unitPrice']).map(({ label, row }) => ({
+    itemId: itemIdOf(row.itemId, label),
+    qty: num(row.qty, `${label}: enter a valid quantity.`),
+    unitPrice: num(row.unitPrice, `${label}: enter a valid price.`),
     label,
   }));
 }

@@ -12,12 +12,8 @@ export function isMovementType(s: unknown): s is MovementType {
   return typeof s === 'string' && (MOVEMENT_TYPES as string[]).includes(s);
 }
 
-export class InventoryError extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = 'InventoryError';
-  }
-}
+import { InventoryError } from './errors';
+export { InventoryError };
 
 const MAX = 1_000_000_000;
 
