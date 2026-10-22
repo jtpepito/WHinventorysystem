@@ -54,13 +54,14 @@ function loadItem(db: DatabaseSync, itemId: number, label: string, allowInactive
 type NewMovement = {
   itemId: number; type: MovementType; qtyDelta: number; unitCost: number | null;
   refNo: string; counterparty: string; note: string; actor: Actor; at: string;
+  purchaseId?: number; saleId?: number; // the document this stock line belongs to, if any
 };
 
 function insertMovement(db: DatabaseSync, m: NewMovement): number {
   return Number(
     db
-      .prepare('INSERT INTO movements (item_id, type, qty_delta, unit_cost, ref_no, counterparty, note, actor, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)')
-      .run(m.itemId, m.type, m.qtyDelta, m.unitCost, m.refNo, m.counterparty, m.note, m.actor, m.at).lastInsertRowid,
+      .prepare('INSERT INTO movements (item_id, type, qty_delta, unit_cost, ref_no, counterparty, note, actor, created_at, purchase_id, sale_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
+      .run(m.itemId, m.type, m.qtyDelta, m.unitCost, m.refNo, m.counterparty, m.note, m.actor, m.at, m.purchaseId ?? null, m.saleId ?? null).lastInsertRowid,
   );
 }
 
@@ -77,7 +78,7 @@ function optionalText(raw: string | undefined, max: number): string {
 
 // label: the row name the user saw (e.g. "Line 3"), so errors point at the right row even after blank rows are dropped.
 export type ReceiptLine = { itemId: number; qty: number; unitCost: number; label?: string };
-export type ReceiptInput = { supplierId: number; refNo: string; note?: string; lines: ReceiptLine[] };
+export type ReceiptInput = { supplierId: number; refNo: string; note?: string; lines: ReceiptLine[]; purchaseId?: number };
 
 export function postReceipt(db: DatabaseSync, input: ReceiptInput, actor: Actor, at = nowIso()): number[] {
   const refNo = requireText(input.refNo, 'Reference no. is required.', 60);
@@ -94,13 +95,13 @@ export function postReceipt(db: DatabaseSync, input: ReceiptInput, actor: Actor,
       const item = loadItem(db, line.itemId, label);
       const newAvg = weightedAverage(item.qty, item.avg_cost, qty, cost);
       db.prepare('UPDATE items SET qty = ROUND(qty + ?, 3), avg_cost = ? WHERE id = ?').run(qty, newAvg, item.id);
-      return insertMovement(db, { itemId: item.id, type: 'receive', qtyDelta: qty, unitCost: cost, refNo, counterparty: supplier.name, note, actor, at });
+      return insertMovement(db, { itemId: item.id, type: 'receive', qtyDelta: qty, unitCost: cost, refNo, counterparty: supplier.name, note, actor, at, purchaseId: input.purchaseId });
     });
   });
 }
 
 export type ReleaseLine = { itemId: number; qty: number; label?: string };
-export type ReleaseInput = { counterparty: string; refNo: string; note?: string; lines: ReleaseLine[] };
+export type ReleaseInput = { counterparty: string; refNo: string; note?: string; lines: ReleaseLine[]; saleId?: number };
 
 export function postRelease(db: DatabaseSync, input: ReleaseInput, actor: Actor, at = nowIso()): number[] {
   const counterparty = requireText(input.counterparty, 'Destination / customer is required.', 120);
@@ -129,14 +130,15 @@ export function postRelease(db: DatabaseSync, input: ReleaseInput, actor: Actor,
     return checked.map(({ itemId, qty }) => {
       const item = loadItem(db, itemId, 'Release');
       db.prepare('UPDATE items SET qty = ROUND(qty - ?, 3) WHERE id = ?').run(qty, itemId);
-      return insertMovement(db, { itemId, type: 'release', qtyDelta: -qty, unitCost: item.avg_cost, refNo, counterparty, note, actor, at });
+      return insertMovement(db, { itemId, type: 'release', qtyDelta: -qty, unitCost: item.avg_cost, refNo, counterparty, note, actor, at, saleId: input.saleId });
     });
   });
 }
 
 export function postAdjustment(
   db: DatabaseSync,
-  input: { itemId: number; qtyDelta: number; refNo: string; note: string },
+  // unitCost: a sale void returns stock at the cost it left with; otherwise the current avg cost is recorded.
+  input: { itemId: number; qtyDelta: number; refNo: string; note: string; unitCost?: number; saleId?: number; purchaseId?: number },
   actor: Actor,
   at = nowIso(),
 ): number {
@@ -150,7 +152,10 @@ export function postAdjustment(
       throw new InventoryError(`Adjustment would take ${item.sku} below zero (on hand ${formatQty(item.qty)}).`);
     }
     db.prepare('UPDATE items SET qty = ROUND(qty + ?, 3) WHERE id = ?').run(delta, item.id);
-    return insertMovement(db, { itemId: item.id, type: 'adjust', qtyDelta: delta, unitCost: item.avg_cost, refNo: input.refNo, counterparty: '', note: input.note, actor, at });
+    return insertMovement(db, {
+      itemId: item.id, type: 'adjust', qtyDelta: delta, unitCost: input.unitCost ?? item.avg_cost, refNo: input.refNo, counterparty: '', note: input.note,
+      actor, at, saleId: input.saleId, purchaseId: input.purchaseId,
+    });
   });
 }
 
