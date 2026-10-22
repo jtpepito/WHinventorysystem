@@ -1,9 +1,15 @@
 import type { DatabaseSync } from 'node:sqlite';
 import { getCountSession, postCountSession, saveCountActuals, startCountSession } from './count';
-import { postReceipt, postRelease } from './inventory';
+import { createCustomer } from './customers';
+import { postExpense } from './expenses';
+import { ACC, postManualJournal } from './ledger';
+import { VAT_RATE } from './money';
 import { round } from './num';
+import { postPurchase, postSupplierPayment } from './purchases';
+import { postCustomerPayment } from './receivables';
+import { postSale } from './sales';
+import { setSetting } from './settings';
 import { tx } from './sqlite';
-import { journalForOpening } from './stock-postings';
 import { addDays, manilaAt, manilaDay, nowIso } from './time';
 
 type SeedItem = { sku: string; name: string; unit: string; cost: number };
@@ -66,7 +72,9 @@ const SUPPLIERS = [
   { name: 'Luzon Pipe & Fasteners Co.', contact: '0917 555 0142' },
   { name: 'Bulacan Paint Distributors', contact: '0918 555 0199' },
 ];
-const CUSTOMERS = ['Walk-in', 'JDC Construction', 'Santos Residence Project', 'Reyes Builders', 'Dela Cruz Electrical Services', 'Brgy. San Isidro Hall'];
+// Named (on-account) customers; walk-in sales carry no customer.
+const CUSTOMERS = ['JDC Construction', 'Santos Residence Project', 'Reyes Builders', 'Dela Cruz Electrical Services'];
+const MARKUP = 1.35;
 
 export const LOW_STOCK_SKUS = ['EL-005', 'PL-003', 'TL-006', 'PT-001', 'FS-001', 'FS-004'];
 export const DEAD_STOCK_SKUS = ['EL-008', 'TL-008', 'PT-005'];
@@ -90,15 +98,21 @@ export function seed(db: DatabaseSync, now = nowIso()): void {
 
   tx(db, () => {
     const id = (sql: string, ...p: (string | number)[]) => Number(db.prepare(sql).run(...p).lastInsertRowid);
+    const day = (daysAgo: number) => manilaDay(at(daysAgo, 12));
+    setSetting(db, 'business_name', 'Sample Hardware Trading');
+    setSetting(db, 'business_address', '123 Rizal St., San Isidro');
+    setSetting(db, 'receipt_footer', 'Thank you! Goods are checked before leaving the store.');
     const supplierIds = SUPPLIERS.map((s) => id('INSERT INTO suppliers (name, contact) VALUES (?, ?)', s.name, s.contact));
+    const customerIds = CUSTOMERS.map((name) => createCustomer(db, { name, termsDays: 30 }));
     const unitIds = new Map<string, number>();
-    const items: { id: number; sku: string; cost: number; supplier: number; categoryId: number }[] = [];
+    const items: { id: number; sku: string; cost: number; price: number; supplier: number; categoryId: number }[] = [];
     for (const [category, group] of Object.entries(CATALOG)) {
       const categoryId = id('INSERT INTO categories (name) VALUES (?)', category);
       for (const it of group.items) {
         if (!unitIds.has(it.unit)) unitIds.set(it.unit, id('INSERT INTO units (name) VALUES (?)', it.unit));
-        const itemId = id('INSERT INTO items (sku, name, category_id, unit_id) VALUES (?, ?, ?, ?)', it.sku, it.name, categoryId, unitIds.get(it.unit)!);
-        items.push({ id: itemId, sku: it.sku, cost: it.cost, supplier: group.supplier, categoryId });
+        const price = round(it.cost * MARKUP, 2);
+        const itemId = id('INSERT INTO items (sku, name, category_id, unit_id, sell_price) VALUES (?, ?, ?, ?, ?)', it.sku, it.name, categoryId, unitIds.get(it.unit)!, price);
+        items.push({ id: itemId, sku: it.sku, cost: it.cost, price, supplier: group.supplier, categoryId });
       }
     }
     const qty = (itemId: number) => (db.prepare('SELECT qty FROM items WHERE id = ?').get(itemId) as { qty: number }).qty;
@@ -106,36 +120,57 @@ export function seed(db: DatabaseSync, now = nowIso()): void {
     const isDead = (sku: string) => DEAD_STOCK_SKUS.includes(sku);
     let seq = 1000;
 
-    // Opening stock, 62 days ago.
-    supplierIds.forEach((supplierId, s) => {
+    // Day 62: the owner puts in capital, then the opening stock arrives on account and is paid ten days later.
+    postManualJournal(db, { date: day(62), memo: 'Owner capital', lines: [{ account: ACC.bank, debit: 150000 }, { account: ACC.cash, debit: 50000 }, { account: ACC.capital, credit: 200000 }] }, 'admin', at(62, 8));
+    const opening = supplierIds.map((supplierId, s) => {
       const lines = items.filter((i) => i.supplier === s).map((i) => ({ itemId: i.id, qty: rint(40, 150), unitCost: i.cost }));
-      postReceipt(db, { supplierId, refNo: `OB-${s + 1}`, note: 'Opening balance', lines }, 'admin', at(62, 8));
-      journalForOpening(db, { date: manilaDay(at(62, 8)), amount: lines.reduce((t, l) => t + l.qty * l.unitCost, 0), refNo: `OB-${s + 1}` }, 'admin', at(62, 8));
+      return postPurchase(db, { date: day(62), supplierId, refNo: `OB-${s + 1}`, method: 'credit', vatInvoice: false, note: 'Opening stock', lines }, 'admin', at(62, 9 + s));
     });
+    opening.forEach((p) => postSupplierPayment(db, { date: day(52), purchaseId: p.id, amount: p.total, method: 'bank', refNo: `CHK-${++seq}` }, 'admin', at(52, 10)));
+
+    const monthly = (d: number) => {
+      postExpense(db, { date: day(d), accountCode: '6100', payee: 'A. Villanueva (lessor)', amount: 15000, vatInvoice: true, method: 'bank', refNo: `OR-${++seq}` }, 'admin', at(d, 9));
+      postExpense(db, { date: day(d), accountCode: '6300', payee: 'Meralco', amount: 3584, vatInvoice: true, method: 'gcash', refNo: `${++seq}` }, 'admin', at(d, 9, 30));
+      postExpense(db, { date: day(d), accountCode: '6200', payee: 'Staff payroll', amount: 18000, vatInvoice: false, method: 'cash' }, 'admin', at(d, 17));
+    };
+    monthly(60);
+    monthly(30);
+    postExpense(db, { date: day(45), accountCode: '6500', payee: 'National Bookstore', amount: 1120, vatInvoice: true, method: 'cash', refNo: `${++seq}` }, 'encoder', at(45, 11));
 
     const movers = items.filter((i) => !isDead(i.sku));
     const fasteners = items.find((i) => i.sku === 'FS-001')!.categoryId;
     for (let d = 58; d >= 1; d--) {
-      const releases = rint(2, 5);
-      for (let k = 0; k < releases; k++) {
-        const lines: { itemId: number; qty: number }[] = [];
+      const salesToday = rint(2, 5);
+      for (let k = 0; k < salesToday; k++) {
+        const lines: { itemId: number; qty: number; unitPrice: number }[] = [];
         for (let n = rint(1, 3); n > 0; n--) {
           const it = movers[rint(0, movers.length - 1)];
           if (lines.some((l) => l.itemId === it.id)) continue;
           const room = Math.floor(qty(it.id) - (isLow(it.sku) ? 2 : 12));
           if (room < 1) continue;
-          lines.push({ itemId: it.id, qty: rint(1, Math.min(room, 15)) });
+          lines.push({ itemId: it.id, qty: rint(1, Math.min(room, 15)), unitPrice: it.price });
         }
-        if (lines.length) {
-          postRelease(db, { counterparty: CUSTOMERS[rint(0, CUSTOMERS.length - 1)], refNo: `DR-${++seq}`, lines }, 'encoder', at(d, 9 + k, rint(0, 59)));
+        if (!lines.length) continue;
+        const roll = rand();
+        const method = roll < 0.7 ? 'cash' : roll < 0.85 ? 'gcash' : 'credit';
+        const customerId = method === 'credit' || rand() < 0.2 ? customerIds[rint(0, customerIds.length - 1)] : null;
+        const sale = postSale(db, { date: day(d), customerId, method, lines }, 'encoder', at(d, 9 + k, rint(0, 59)));
+        // About half the on-account sales get collected, in full or in part, a week or two later.
+        const collectOn = d - rint(5, 20);
+        if (method === 'credit' && collectOn >= 1 && rand() < 0.55) {
+          const amount = rand() < 0.6 ? sale.total : round(sale.total * 0.5, 2);
+          postCustomerPayment(db, { date: day(collectOn), saleId: sale.id, amount, method: rand() < 0.5 ? 'cash' : 'bank', refNo: `OR-${++seq}` }, 'encoder', at(collectOn, 10, rint(0, 59)));
         }
       }
       if (d % 7 === 0) {
         supplierIds.forEach((supplierId, s) => {
           const lines = items
             .filter((i) => i.supplier === s && !isDead(i.sku) && !isLow(i.sku) && qty(i.id) < 40)
-            .map((i) => ({ itemId: i.id, qty: rint(30, 80), unitCost: round(i.cost * (0.95 + rand() * 0.15), 2) }));
-          if (lines.length) postReceipt(db, { supplierId, refNo: `RR-${++seq}`, lines }, 'admin', at(d, 15));
+            .map((i) => ({ itemId: i.id, qty: rint(30, 80), unitCost: round(i.cost * (0.95 + rand() * 0.15) * (1 + VAT_RATE), 2) }));
+          if (!lines.length) return;
+          const method = s === 0 ? 'credit' : 'bank';
+          const p = postPurchase(db, { date: day(d), supplierId, refNo: `INV-${++seq}`, method, vatInvoice: true, lines }, 'admin', at(d, 15));
+          if (method === 'credit' && d - 7 >= 1) postSupplierPayment(db, { date: day(d - 7), purchaseId: p.id, amount: p.total, method: 'bank', refNo: `CHK-${++seq}` }, 'admin', at(d - 7, 11));
         });
       }
       if (d === 10) {

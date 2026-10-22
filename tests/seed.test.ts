@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
+import { balanceSheet, financeCheck, incomeStatement } from '@/lib/finance-reports';
 import { ledgerCheck } from '@/lib/inventory';
+import { businessInfo, vatRegistered } from '@/lib/settings';
+import { addDays, manilaDay } from '@/lib/time';
 import { buildReport } from '@/lib/reports';
 import { DEAD_STOCK_SKUS, LOW_STOCK_SKUS, seed, seedIfEmpty } from '@/lib/seed';
 import { openDb } from '@/lib/sqlite';
@@ -59,11 +62,36 @@ describe('seed', () => {
     expect(seedIfEmpty(db, NOW, { sample: false })).toBe(false);
     expect(count(db, 'SELECT COUNT(*) AS n FROM categories')).toBe(5);
   });
+  it('books a trading history that balances', () => {
+    const db = seeded();
+    expect(count(db, "SELECT COUNT(*) AS n FROM sales WHERE status = 'posted'")).toBeGreaterThanOrEqual(100);
+    expect(count(db, "SELECT COUNT(*) AS n FROM sales WHERE payment_method = 'credit'")).toBeGreaterThan(5);
+    expect(count(db, "SELECT COUNT(*) AS n FROM customer_payments WHERE status = 'posted'")).toBeGreaterThan(2);
+    expect(count(db, "SELECT COUNT(*) AS n FROM purchases WHERE status = 'posted'")).toBeGreaterThan(3);
+    expect(count(db, "SELECT COUNT(*) AS n FROM expenses WHERE status = 'posted'")).toBeGreaterThanOrEqual(6);
+    expect(count(db, 'SELECT COUNT(*) AS n FROM customers')).toBe(4);
+    expect(count(db, 'SELECT COUNT(*) AS n FROM items WHERE sell_price <= avg_cost')).toBe(0);
+    expect(financeCheck(db)).toMatchObject({ match: true, unbalancedEntries: [] });
+    expect(balanceSheet(db, manilaDay(NOW)).balanced).toBe(true);
+    const lastMonth = addDays(manilaDay(NOW).slice(0, 7) + '-01', -1).slice(0, 7);
+    expect(incomeStatement(db, { from: `${lastMonth}-01`, to: addDays(`${manilaDay(NOW).slice(0, 7)}-01`, -1) }).netSales).toBeGreaterThan(0);
+    expect(vatRegistered(db)).toBe(true);
+    expect(businessInfo(db).name).toBe('Sample Hardware Trading');
+  });
+  it('starter seed has the chart and settings but no books', () => {
+    const db = openDb(':memory:');
+    seedIfEmpty(db, NOW, { sample: false });
+    expect(count(db, 'SELECT COUNT(*) AS n FROM accounts')).toBe(22);
+    expect(count(db, 'SELECT COUNT(*) AS n FROM journal_entries')).toBe(0);
+    expect(vatRegistered(db)).toBe(true);
+    expect(businessInfo(db).name).toBe('');
+  });
   it('is deterministic and seeds only an empty DB', () => {
     const a = seeded();
     const b = seeded();
     const snap = (db: typeof a) => plain(db.prepare('SELECT sku, qty, avg_cost, reorder_point FROM items ORDER BY sku').all());
     expect(snap(a)).toEqual(snap(b));
+    expect(balanceSheet(a, manilaDay(NOW))).toEqual(balanceSheet(b, manilaDay(NOW)));
     expect(seedIfEmpty(a, NOW)).toBe(false);
     expect(seedIfEmpty(openDb(':memory:'), NOW)).toBe(true);
   });
