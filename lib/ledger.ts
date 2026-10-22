@@ -1,4 +1,5 @@
 import type { DatabaseSync } from 'node:sqlite';
+import { type AccountType, ensureChart } from './chart';
 import { type Actor, InventoryError } from './inventory';
 import { roundMoney } from './money';
 import { formatPeso } from './num';
@@ -17,25 +18,13 @@ export const ACC = {
 // Posted only by documents (sales, purchases, payments, counts); manual entries may not touch them.
 export const CONTROLLED: string[] = [ACC.ar, ACC.inventory, ACC.ap];
 
-export type AccountType = 'asset' | 'liability' | 'equity' | 'income' | 'expense';
+export type { AccountType } from './chart';
 export const ACCOUNT_TYPES: AccountType[] = ['asset', 'liability', 'equity', 'income', 'expense'];
 export type AccountRow = { id: number; code: string; name: string; type: AccountType; system: boolean; active: boolean };
 export type PayMethod = 'cash' | 'gcash' | 'bank';
 export const PAY_METHODS: PayMethod[] = ['cash', 'gcash', 'bank'];
 export type JournalLineInput = { account: string; debit?: number; credit?: number };
 export type NumberPrefix = 'SI' | 'CR' | 'PUR' | 'PV' | 'EXP' | 'JE';
-
-const CHART: [string, string, AccountType][] = [
-  ['1010', 'Cash on hand', 'asset'], ['1020', 'GCash', 'asset'], ['1030', 'Bank', 'asset'],
-  ['1100', 'Accounts receivable', 'asset'], ['1200', 'Inventory', 'asset'], ['1300', 'Input VAT', 'asset'],
-  ['2100', 'Accounts payable', 'liability'], ['2200', 'Output VAT payable', 'liability'],
-  ['3100', "Owner's capital", 'equity'], ['3200', "Owner's drawings", 'equity'], ['3900', 'Retained earnings', 'equity'],
-  ['4100', 'Sales', 'income'], ['4200', 'Sales returns', 'income'],
-  ['5100', 'Cost of goods sold', 'expense'], ['5200', 'Inventory shrinkage / adjustments', 'expense'],
-  ['6100', 'Rent', 'expense'], ['6200', 'Salaries & wages', 'expense'], ['6300', 'Utilities', 'expense'],
-  ['6400', 'Transport & delivery', 'expense'], ['6500', 'Supplies', 'expense'], ['6600', 'Repairs & maintenance', 'expense'],
-  ['6900', 'Other expenses', 'expense'],
-];
 
 export function cashAccountFor(m: PayMethod): string {
   return m === 'cash' ? ACC.cash : m === 'gcash' ? ACC.gcash : ACC.bank;
@@ -45,11 +34,8 @@ export function isPayMethod(s: unknown): s is PayMethod {
   return s === 'cash' || s === 'gcash' || s === 'bank';
 }
 
-// Idempotent: codes below 6000 are system accounts, the 6xxx expense accounts are editable.
-export function seedChart(db: DatabaseSync): void {
-  const insert = db.prepare('INSERT OR IGNORE INTO accounts (code, name, type, system) VALUES (?, ?, ?, ?)');
-  for (const [code, name, type] of CHART) insert.run(code, name, type, code < '6000' ? 1 : 0);
-}
+// openDb already ensures the chart; this stays for callers that build a chart explicitly.
+export const seedChart = ensureChart;
 
 type RawAccount = Omit<AccountRow, 'system' | 'active'> & { system: number; active: number };
 const toAccount = (r: RawAccount): AccountRow => ({ ...r, system: r.system === 1, active: r.active === 1 });

@@ -57,9 +57,9 @@ describe('accounting schema', () => {
   });
   it('journal lines carry a debit or a credit, never both or neither', () => {
     const { db } = makeDb();
-    db.prepare("INSERT INTO accounts (code, name, type) VALUES ('1010', 'Cash', 'asset')").run();
+    const cash = (db.prepare("SELECT id FROM accounts WHERE code = '1010'").get() as { id: number }).id; // openDb seeds the chart
     db.prepare("INSERT INTO journal_entries (entry_no, date, source_type, memo, actor, created_at) VALUES ('JE-000001', '2026-10-01', 'manual', 'm', 'admin', 'x')").run();
-    const ok = db.prepare('INSERT INTO journal_lines (entry_id, account_id, debit, credit) VALUES (1, 1, ?, ?)');
+    const ok = db.prepare(`INSERT INTO journal_lines (entry_id, account_id, debit, credit) VALUES (1, ${cash}, ?, ?)`);
     ok.run(5, 0);
     expect(() => ok.run(5, 5)).toThrow();
     expect(() => ok.run(0, 0)).toThrow();

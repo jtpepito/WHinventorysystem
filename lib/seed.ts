@@ -3,6 +3,7 @@ import { getCountSession, postCountSession, saveCountActuals, startCountSession 
 import { postReceipt, postRelease } from './inventory';
 import { round } from './num';
 import { tx } from './sqlite';
+import { journalForOpening } from './stock-postings';
 import { addDays, manilaAt, manilaDay, nowIso } from './time';
 
 type SeedItem = { sku: string; name: string; unit: string; cost: number };
@@ -109,6 +110,7 @@ export function seed(db: DatabaseSync, now = nowIso()): void {
     supplierIds.forEach((supplierId, s) => {
       const lines = items.filter((i) => i.supplier === s).map((i) => ({ itemId: i.id, qty: rint(40, 150), unitCost: i.cost }));
       postReceipt(db, { supplierId, refNo: `OB-${s + 1}`, note: 'Opening balance', lines }, 'admin', at(62, 8));
+      journalForOpening(db, { date: manilaDay(at(62, 8)), amount: lines.reduce((t, l) => t + l.qty * l.unitCost, 0), refNo: `OB-${s + 1}` }, 'admin', at(62, 8));
     });
 
     const movers = items.filter((i) => !isDead(i.sku));

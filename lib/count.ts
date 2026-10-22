@@ -2,6 +2,7 @@ import type { DatabaseSync } from 'node:sqlite';
 import { type Actor, InventoryError, postAdjustment } from './inventory';
 import { round } from './num';
 import { tx } from './sqlite';
+import { journalForCount } from './stock-postings';
 import { assertOpen } from './periods';
 import { manilaDay, nowIso } from './time';
 
@@ -136,11 +137,15 @@ export function postCountSession(db: DatabaseSync, sessionId: number, actor: Act
       );
     }
     let adjustments = 0;
+    let delta = 0; // signed peso value of the variances, at avg cost — the adjustment records the same cost
     for (const l of counted) {
       if (!l.variance) continue;
+      const { avg_cost } = db.prepare('SELECT avg_cost FROM items WHERE id = ?').get(l.itemId) as { avg_cost: number };
+      delta += l.variance * avg_cost;
       postAdjustment(db, { itemId: l.itemId, qtyDelta: l.variance, refNo: `COUNT-${sessionId}`, note: 'count variance' }, actor, at);
       adjustments++;
     }
+    journalForCount(db, { date: manilaDay(at), sessionId, delta }, actor, at);
     db.prepare('UPDATE count_sessions SET posted_at = ? WHERE id = ?').run(at, sessionId);
     return { adjustments };
   });

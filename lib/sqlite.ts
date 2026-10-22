@@ -1,4 +1,5 @@
 import { DatabaseSync } from 'node:sqlite';
+import { ensureChart } from './chart';
 import { DOCUMENT_TRIGGERS, SCHEMA } from './schema';
 
 export function openDb(file: string): DatabaseSync {
@@ -8,6 +9,7 @@ export function openDb(file: string): DatabaseSync {
   db.exec(SCHEMA);
   db.exec(DOCUMENT_TRIGGERS);
   migrate(db);
+  ensureChart(db); // postings need the system accounts on every database, including ones created before accounting existed
   return db;
 }
 

@@ -4,6 +4,7 @@ import { parseCsv, toCsv } from './csv';
 import { type Actor, InventoryError, postReceipt } from './inventory';
 import { parseNumberInput, round } from './num';
 import { tx } from './sqlite';
+import { journalForOpening } from './stock-postings';
 import { manilaDay, nowIso } from './time';
 
 export const MAX_IMPORT_ROWS = 2000;
@@ -178,6 +179,8 @@ export function commitImport(db: DatabaseSync, text: string, actor: Actor, at = 
     const supplierId = existing?.id ?? addSupplier(db, OPENING_SUPPLIER, '');
     const refNo = `OPENING-${manilaDay(at)}`;
     postReceipt(db, { supplierId, refNo, note: 'Opening balance (CSV import)', lines }, actor, at);
+    const value = lines.reduce((s, l) => s + l.qty * l.unitCost, 0);
+    journalForOpening(db, { date: manilaDay(at), amount: value, refNo }, actor, at);
     return { items: created.length, stocked: lines.length, refNo };
   });
 }
