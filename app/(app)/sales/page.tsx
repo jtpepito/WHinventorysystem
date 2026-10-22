@@ -21,8 +21,9 @@ export default async function SalesPage({ searchParams }: { searchParams: SP }) 
   const role = await requireRole('admin', 'encoder');
   const sp = await searchParams;
   const today = manilaDay(nowIso());
-  const from = isDay(one(sp.from)) ? one(sp.from) : `${today.slice(0, 7)}-01`;
-  const to = isDay(one(sp.to)) ? one(sp.to) : today;
+  // Encoders run today's register; the history and margins are the owner's.
+  const from = role === 'encoder' ? today : isDay(one(sp.from)) ? one(sp.from) : `${today.slice(0, 7)}-01`;
+  const to = role === 'encoder' ? today : isDay(one(sp.to)) ? one(sp.to) : today;
   const customerId = Number(one(sp.customer)) || undefined;
   const rawMethod = one(sp.method);
   const method = isSaleMethod(rawMethod) ? rawMethod : undefined;
@@ -45,8 +46,8 @@ export default async function SalesPage({ searchParams }: { searchParams: SP }) 
         }
       />
       <form className="mb-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-[10rem_10rem_1fr_10rem_8rem_auto] lg:items-end">
-        <div className="space-y-1"><Label htmlFor="from">From</Label><Input id="from" name="from" type="date" defaultValue={from} /></div>
-        <div className="space-y-1"><Label htmlFor="to">To</Label><Input id="to" name="to" type="date" defaultValue={to} /></div>
+        <div className="space-y-1"><Label htmlFor="from">From</Label><Input id="from" name="from" type="date" defaultValue={from} disabled={role === 'encoder'} /></div>
+        <div className="space-y-1"><Label htmlFor="to">To</Label><Input id="to" name="to" type="date" defaultValue={to} disabled={role === 'encoder'} /></div>
         <div className="space-y-1">
           <Label htmlFor="customer">Customer</Label>
           <NativeSelect id="customer" name="customer" defaultValue={customerId ?? ''}>
@@ -95,7 +96,7 @@ export default async function SalesPage({ searchParams }: { searchParams: SP }) 
               <TableRow className="font-semibold">
                 <TableCell colSpan={4}>Posted total</TableCell>
                 <TableCell className="text-right tabular-nums">{formatPeso(totals.total)}</TableCell>
-                <TableCell colSpan={2} className="text-xs font-normal text-muted-foreground">VAT {formatPeso(totals.vat)} · cost {formatPeso(totals.cogs)}</TableCell>
+                <TableCell colSpan={2} className="text-xs font-normal text-muted-foreground">VAT {formatPeso(totals.vat)}{role === 'admin' && ` · cost ${formatPeso(totals.cogs)}`}</TableCell>
               </TableRow>
             </TableBody>
           </Table>

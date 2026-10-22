@@ -6,6 +6,12 @@ test('encoders see sales, customers and purchases, never finance', async ({ page
   const nav = page.getByRole('navigation', { name: 'Main' });
   for (const shown of ['Sales', 'Customers', 'Purchases', 'Receive']) await expect(nav.getByRole('link', { name: shown, exact: true })).toBeVisible();
   for (const hidden of ['Expenses', 'Finance', 'Reports', 'Settings', 'Dashboard']) await expect(nav.getByRole('link', { name: hidden, exact: true })).toHaveCount(0);
+  // The register is today only and shows no cost, whatever the URL asks for.
+  await page.goto('/sales?from=2020-01-01&to=2030-12-31');
+  const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' });
+  await expect(page.getByLabel('From')).toBeDisabled();
+  await expect(page.getByText(`${today} to ${today}`)).toBeVisible();
+  await expect(page.getByText(/· cost ₱/)).toHaveCount(0);
   await page.goto('/expenses');
   await expect(page).toHaveURL(/\/receive\?denied=1$/);
   await page.goto('/finance/journal');

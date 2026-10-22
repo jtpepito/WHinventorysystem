@@ -19,6 +19,7 @@ test('receive → weighted average, release block, count variance, ledger match'
     await page.goto('/receive');
     await page.getByLabel('Supplier', { exact: true }).selectOption({ index: 1 });
     await page.getByLabel('Supplier invoice no.').fill(ref);
+    await page.getByLabel('Payment method').selectOption('cash');
     await page.getByLabel('Line 1 item').selectOption({ label: ITEM_LABEL });
     await page.getByLabel('Line 1 qty').fill('10');
     await page.getByLabel('Line 1 unit cost').fill(cost);

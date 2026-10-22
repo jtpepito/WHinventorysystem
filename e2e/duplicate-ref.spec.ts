@@ -17,6 +17,7 @@ test('a repeated receipt reference warns once and can be posted anyway', async (
   const fill = async (ref: string) => {
     await page.getByLabel('Supplier', { exact: true }).selectOption({ index: 1 });
     await page.getByLabel('Supplier invoice no.').fill(ref);
+    await page.getByLabel('Payment method').selectOption('cash');
     await page.getByLabel('Line 1 item').selectOption({ index: 1 });
     await page.getByLabel('Line 1 qty').fill('1');
     await page.getByLabel('Line 1 unit cost').fill('10');

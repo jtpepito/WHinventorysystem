@@ -3,7 +3,7 @@ import { requireRole } from '@/lib/auth';
 import { getDb } from '@/lib/db';
 import { formatPeso, formatQty } from '@/lib/num';
 import { getSale } from '@/lib/sales';
-import { businessInfo, vatRegistered } from '@/lib/settings';
+import { businessInfo } from '@/lib/settings';
 import { formatManila } from '@/lib/time';
 import { PrintButton } from './print-button';
 
@@ -16,7 +16,7 @@ export default async function ReceiptPage({ params }: { params: Promise<{ id: st
   const sale = Number.isInteger(id) ? getSale(db, id) : null;
   if (!sale) notFound();
   const biz = businessInfo(db);
-  const isVat = vatRegistered(db);
+  const isVat = sale.vat > 0; // the receipt shows what this sale carried, whatever the setting is now
   return (
     <div className="mx-auto max-w-sm bg-white p-4 font-mono text-sm text-black print:max-w-none print:p-0">
       <div className="mb-3 text-center">
@@ -25,6 +25,7 @@ export default async function ReceiptPage({ params }: { params: Promise<{ id: st
         {biz.tin && <p>TIN {biz.tin}{isVat ? ' · VAT Reg.' : ' · Non-VAT'}</p>}
       </div>
       <p>{sale.status === 'void' ? 'VOID — ' : ''}{sale.number}</p>
+      <p>Date: {sale.date}</p>
       <p>{formatManila(sale.createdAt)}</p>
       <p>Customer: {sale.customerName}</p>
       <p>Paid by: {METHOD[sale.method]}</p>

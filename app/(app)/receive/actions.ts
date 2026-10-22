@@ -15,7 +15,7 @@ export async function receiveAction(_prev: ActionResult, fd: FormData): Promise<
     const lines = parseReceiptLines(String(fd.get('lines') ?? '[]'));
     const refNo = String(fd.get('refNo') ?? '');
     const supplierId = Number(fd.get('supplierId'));
-    const method = String(fd.get('method') ?? 'cash');
+    const method = String(fd.get('method') ?? '');
     if (!isPurchaseMethod(method)) return { ok: false, error: 'Pick how it was paid.' };
     // Hold a repeated supplier invoice once; "Post anyway" resubmits with confirmRef equal to this exact reference.
     if (String(fd.get('confirmRef') ?? '') !== refNo.trim()) {

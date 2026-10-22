@@ -9,7 +9,6 @@ import { getDb } from '@/lib/db';
 import { formatPeso, formatQty } from '@/lib/num';
 import { listCustomerPayments } from '@/lib/receivables';
 import { getSale, SALE_METHOD_LABEL as METHOD_LABEL } from '@/lib/sales';
-import { vatRegistered } from '@/lib/settings';
 import { formatManila, manilaDay, nowIso } from '@/lib/time';
 import { PaymentForm, VoidPaymentButton, VoidSaleForm } from './sale-actions';
 
@@ -21,7 +20,7 @@ export default async function SalePage({ params, searchParams }: { params: Promi
   const sale = Number.isInteger(id) ? getSale(db, id) : null;
   if (!sale) notFound();
   const payments = listCustomerPayments(db, { saleId: sale.id });
-  const isVat = vatRegistered(db);
+  const isVat = sale.vat > 0; // what the sale carried, not today's setting
   return (
     <>
       <PageHeader

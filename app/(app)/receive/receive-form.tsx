@@ -24,7 +24,8 @@ export function ReceiveForm({ items, suppliers, today, vatRegistered }: {
   const [supplierId, setSupplierId] = useState('');
   const [refNo, setRefNo] = useState('');
   const [date, setDate] = useState(today);
-  const [method, setMethod] = useState('cash');
+  // No default: how the stock was paid for is a fact the encoder states, not one the form assumes.
+  const [method, setMethod] = useState('');
   // Off by default: ticking it nets 12% off every cost typed below, which must be a deliberate choice.
   const [vatInvoice, setVatInvoice] = useState(false);
   const [note, setNote] = useState('');
@@ -70,7 +71,8 @@ export function ReceiveForm({ items, suppliers, today, vatRegistered }: {
         </div>
         <div className="space-y-2">
           <Label htmlFor="method">Payment method</Label>
-          <NativeSelect id="method" name="method" value={method} onChange={(e) => setMethod(e.target.value)}>
+          <NativeSelect id="method" name="method" required value={method} onChange={(e) => setMethod(e.target.value)}>
+            <option value="">Pick one…</option>
             <option value="cash">Cash</option>
             <option value="gcash">GCash</option>
             <option value="bank">Bank transfer</option>
